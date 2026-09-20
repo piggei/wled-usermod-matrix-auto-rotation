@@ -1,0 +1,57 @@
+; WLED Matrix Auto Rotation - PlatformIO integration sample
+; v0.1.0-dev-b003
+;
+; This file is NOT a standalone firmware project. The usermod is a PlatformIO
+; library loaded by a normal WLED checkout through custom_usermods.
+;
+; Recommended layout:
+;
+;   projects/
+;   |-- WLED/
+;   `-- wled-usermod-matrix-auto-rotation-v0.1.0-dev-b003/
+;
+; Copy the relevant block below into WLED/platformio_override.ini.
+
+; ---------------------------------------------------------------------------
+; OPTION A - add the usermod to an environment you already use
+; ---------------------------------------------------------------------------
+; Replace YOUR_WLED_ENV with the environment you normally build and replace
+; the path with the absolute path to this repository.
+;
+; [env:YOUR_WLED_ENV]
+; custom_usermods =
+;   ${env:YOUR_WLED_ENV.custom_usermods}
+;   symlink:///absolute/path/to/wled-usermod-matrix-auto-rotation-v0.1.0-dev-b003
+;
+; IMPORTANT: if YOUR_WLED_ENV is already declared in platformio_override.ini,
+; add only the custom_usermods lines to that existing section. Do not create a
+; duplicate section with the same name.
+
+; ---------------------------------------------------------------------------
+; OPTION B - create a dedicated test environment without altering your normal
+;            build environment
+; ---------------------------------------------------------------------------
+; Replace BASE_WLED_ENV with your working WLED environment. This is convenient
+; for first hardware tests because it leaves the base environment untouched.
+;
+; [env:matrix_auto_rotation_test]
+; extends = env:BASE_WLED_ENV
+; custom_usermods =
+;   ${env:BASE_WLED_ENV.custom_usermods}
+;   symlink:///absolute/path/to/wled-usermod-matrix-auto-rotation-v0.1.0-dev-b003
+;
+; Build with:
+;   pio run -e matrix_auto_rotation_test
+;
+; Upload with:
+;   pio run -e matrix_auto_rotation_test -t upload
+;
+; Serial monitor:
+;   pio device monitor -e matrix_auto_rotation_test
+
+; ---------------------------------------------------------------------------
+; OPTION C - Git URL (useful after the usermod is pushed/tagged on GitHub)
+; ---------------------------------------------------------------------------
+; custom_usermods =
+;   ${env:BASE_WLED_ENV.custom_usermods}
+;   https://github.com/YOUR_USER/wled-usermod-matrix-auto-rotation.git#TAG_OR_COMMIT

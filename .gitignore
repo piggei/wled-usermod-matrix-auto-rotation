@@ -1,0 +1,12 @@
+.pio/
+.vscode/
+.idea/
+*.code-workspace
+.DS_Store
+Thumbs.db
+*.log
+*.tmp
+*.bak
+*~
+
+*Zone.Identifier
