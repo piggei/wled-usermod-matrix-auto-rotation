@@ -1,14 +1,14 @@
 # WLED Matrix Auto Rotation
 
 **Version:** `0.1.0-dev`  
-**Build:** `3` (`b003`)  
+**Build:** `4` (`b004`)  
 **Status:** Matrix Portal/LIS3DH rotation path hardware-validated; UI refinement build
 
 A standalone WLED usermod that rotates the **final 2D matrix raster** according to an accelerometer, without changing effect or segment state.
 
-## Build 3 focus
+## Build 4 focus
 
-Build 3 keeps the hardware-validated rotation engine unchanged and refines only configuration/UI behavior:
+Build 4 keeps the hardware-validated rotation engine unchanged and continues the configuration/UI cleanup:
 
 - all ordinary field labels end with `:` to match the rest of WLED;
 - the separator immediately below the module title is removed;
@@ -17,8 +17,7 @@ Build 3 keeps the hardware-validated rotation engine unchanged and refines only 
 - the bus selector contains only `Matrix Portal` and `Custom`;
 - Custom SDA/SCL/address fields appear only when `Custom` is selected;
 - `Allow Rotation` is a larger bold subsection and its four checkboxes are displayed on one row when space permits;
-- `Advanced:` remains a checkbox and reveals the four tuning parameters only when enabled;
-- b001 and b002 configuration layouts remain accepted. The short-lived b002 generic ESP32 presets are migrated to equivalent Custom pin values.
+- `Advanced:` remains a checkbox and reveals the four tuning parameters only when enabled.
 
 ## Important architecture rule
 
@@ -106,37 +105,12 @@ No third-party accelerometer library is required; both chips are accessed direct
 | Matrix Portal | board variant (`16`) | board variant (`17`) | automatic probe | **hardware-tested** |
 | Custom | user selected | user selected | Auto or explicit | depends on target |
 
-The two generic ESP32 presets briefly present in b003 were removed because the names were too broad to be reliable board descriptions. Users of other boards select `Custom` and enter the documented pins for that board.
-
-For backward compatibility, a saved b002 `ESP32 Generic / DevKit` selection migrates to Custom `21/22`, while `ESP32-S3 DevKitC-1` migrates to Custom `8/9`.
-
 ## Configuration UI
 
-In **Config -> Usermods -> MatrixAutoRotation** the intended layout is:
+In **Config -> Usermods -> MatrixAutoRotation** the configuration page appears as shown below:
 
-```text
-Enabled:                  [x]
-Setup Rotation:           [0 / 90 / 180 / 270]
+![Matrix Auto Rotation usermod settings](docs/images/configuration.png)
 
-Auto Rotation:            [x]
-Sensor:                   [LIS3DH / GY-521 (MPU-6050)]
-Sensor Mounting:          [0 / 90 / 180 / 270]
-
-I²C
-  Mode:                   [Matrix Portal / Custom]
-  SDA Pin:                [...]        (Custom only)
-  SCL Pin:                [...]        (Custom only)
-  Address:                [Auto / 0x18 / 0x19 / 0x68 / 0x69] (Custom only)
-
-Allow Rotation
-  [x] 0    [x] 90    [x] 180    [x] 270
-
-Advanced:                 [ ]
-  Threshold G:            0.55
-  Hysteresis G:           0.12
-  Stable Ms:              600
-  Poll Ms:                100
-```
 
 The four Advanced values are hidden while `Advanced:` is unchecked. At least one allowed orientation is always enforced; if all four are disabled, `0` is restored automatically.
 
@@ -159,7 +133,7 @@ The repository is laid out as a PlatformIO-compatible **out-of-tree WLED usermod
 extends = env:YOUR_WORKING_WLED_ENV
 custom_usermods =
   ${env:YOUR_WORKING_WLED_ENV.custom_usermods}
-  symlink:///absolute/path/to/wled-usermod-matrix-auto-rotation-v0.1.0-dev-b003
+  symlink:///absolute/path/to/wled-usermod-matrix-auto-rotation-v0.1.0-dev-b004
 ```
 
 Then:

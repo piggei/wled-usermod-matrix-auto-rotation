@@ -4,14 +4,14 @@
 #include "matrix_auto_rotation_sensor.h"
 
 // WLED Matrix Auto Rotation
-// v0.1.0-dev build 3
+// v0.1.0-dev build 4
 //
 // Design rule: the usermod never modifies effect/segment state. Rotation is
 // applied in handleOverlayDraw(), after WLED has composited the final logical
 // raster and immediately before WLED applies its own logical->physical ledmap.
 
 namespace {
-constexpr char MAR_VERSION[] = "0.1.0-dev-b003";
+constexpr char MAR_VERSION[] = "0.1.0-dev-b004";
 constexpr uint8_t I2C_MODE_MATRIXPORTAL = 0;
 constexpr uint8_t I2C_MODE_CUSTOM = 1;
 // Legacy b002 values retained only for transparent configuration migration.
@@ -95,7 +95,7 @@ private:
     if (_sensorType > static_cast<uint8_t>(MARSensorType::MPU6050)) _sensorType = static_cast<uint8_t>(MARSensorType::LIS3DH);
 
     // b002 briefly exposed two generic ESP32 presets. They were too broad for
-    // a board-oriented UI, so b003 migrates them to an equivalent Custom bus
+    // a board-oriented UI, so they are migrated to an equivalent Custom bus
     // instead of silently changing the wiring that an upgraded device uses.
     if (_i2cMode == I2C_MODE_LEGACY_ESP32_GENERIC) {
       _i2cMode = I2C_MODE_CUSTOM;
@@ -480,7 +480,7 @@ public:
     top["sensor-mounting"] = _sensorMountingDeg;
 
     // Keep all bus-related controls in one visible I²C section. Only the
-    // Matrix Portal preset and Custom mode are exposed in b003.
+    // Matrix Portal preset and Custom mode are exposed in the current UI.
     JsonObject i2c = top.createNestedObject("i2c");
     i2c["mode"] = _i2cMode;
     i2c["SDA-pin"] = _customSda;
@@ -511,7 +511,7 @@ public:
     complete &= getJsonValue(top["sensor"], _sensorType, uint8_t(static_cast<uint8_t>(MARSensorType::LIS3DH)));
     complete &= getJsonValue(top["sensor-mounting"], _sensorMountingDeg, uint16_t(0));
 
-    // b003 grouped layout.
+    // Grouped configuration layout.
     JsonObject i2c = top["i2c"];
     if (!i2c.isNull()) {
       complete &= getJsonValue(i2c["mode"], _i2cMode, uint8_t(I2C_MODE_MATRIXPORTAL));

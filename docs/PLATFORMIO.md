@@ -14,7 +14,7 @@ Recommended directory layout:
 ```text
 projects/
 ├── WLED/
-└── wled-usermod-matrix-auto-rotation-v0.1.0-dev-b003/
+└── wled-usermod-matrix-auto-rotation-v0.1.0-dev-b004/
 ```
 
 In `WLED/platformio_override.ini`, add the usermod to the environment that you
@@ -24,7 +24,7 @@ already use for the target board:
 [env:YOUR_WLED_ENV]
 custom_usermods =
   ${env:YOUR_WLED_ENV.custom_usermods}
-  symlink:///absolute/path/to/wled-usermod-matrix-auto-rotation-v0.1.0-dev-b003
+  symlink:///absolute/path/to/wled-usermod-matrix-auto-rotation-v0.1.0-dev-b004
 ```
 
 If that environment already has a section in `platformio_override.ini`, **do not
@@ -44,7 +44,7 @@ the known-good WLED environment unchanged:
 extends = env:BASE_WLED_ENV
 custom_usermods =
   ${env:BASE_WLED_ENV.custom_usermods}
-  symlink:///absolute/path/to/wled-usermod-matrix-auto-rotation-v0.1.0-dev-b003
+  symlink:///absolute/path/to/wled-usermod-matrix-auto-rotation-v0.1.0-dev-b004
 ```
 
 Then use:

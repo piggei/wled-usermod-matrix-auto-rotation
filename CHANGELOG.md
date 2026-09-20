@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.0-dev b004 - 2026-09-20
+
+UI cleanup build; rotation/sensor behavior is unchanged.
+
+- Removed the obsolete generic-ESP32 migration discussion from the README.
+- Removed inline explanatory/help text from the four Advanced fields so the configuration page stays compact.
+- Kept labels, values and Advanced visibility behavior unchanged.
+
 ## 0.1.0-dev b003 - 2026-09-20
 
 UI polish build; rotation/sensor behavior is unchanged from the hardware-working baseline.

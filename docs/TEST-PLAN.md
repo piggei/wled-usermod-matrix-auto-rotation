@@ -1,6 +1,6 @@
-# v0.1.0-dev b003 test plan
+# v0.1.0-dev b004 test plan
 
-b003 keeps the b001/b002 rotation engine unchanged. Matrix Portal + onboard LIS3DH auto-rotation and Setup Rotation are already hardware-confirmed. This build primarily needs UI regression testing.
+b004 keeps the b001/b002 rotation engine unchanged. Matrix Portal + onboard LIS3DH auto-rotation and Setup Rotation are already hardware-confirmed. This build primarily needs UI regression testing.
 
 ## A. UI layout
 
@@ -60,7 +60,7 @@ Saving and reloading must preserve both the checkbox and values.
 
 ### B1 - b001
 
-Upgrade a configuration with the old flat I²C and allow keys. Values must be retained and rewritten in the b003 grouped structure after save.
+Upgrade a configuration with the old flat I²C and allow keys. Values must be retained and rewritten in the current grouped structure after save.
 
 ### B2 - b002 Matrix Portal / Custom
 
