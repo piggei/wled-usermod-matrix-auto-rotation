@@ -1,5 +1,5 @@
 ; WLED Matrix Auto Rotation - PlatformIO integration sample
-; v0.1.0-dev-b004
+; v0.1.0-dev-b010
 ;
 ; This file is NOT a standalone firmware project. The usermod is a PlatformIO
 ; library loaded by a normal WLED checkout through custom_usermods.
@@ -8,7 +8,7 @@
 ;
 ;   projects/
 ;   |-- WLED/
-;   `-- wled-usermod-matrix-auto-rotation-v0.1.0-dev-b004/
+;   `-- wled-usermod-matrix-auto-rotation/
 ;
 ; Copy the relevant block below into WLED/platformio_override.ini.
 
@@ -21,7 +21,7 @@
 ; [env:YOUR_WLED_ENV]
 ; custom_usermods =
 ;   ${env:YOUR_WLED_ENV.custom_usermods}
-;   symlink:///absolute/path/to/wled-usermod-matrix-auto-rotation-v0.1.0-dev-b004
+;   symlink:///absolute/path/to/wled-usermod-matrix-auto-rotation
 ;
 ; IMPORTANT: if YOUR_WLED_ENV is already declared in platformio_override.ini,
 ; add only the custom_usermods lines to that existing section. Do not create a
@@ -38,7 +38,7 @@
 ; extends = env:BASE_WLED_ENV
 ; custom_usermods =
 ;   ${env:BASE_WLED_ENV.custom_usermods}
-;   symlink:///absolute/path/to/wled-usermod-matrix-auto-rotation-v0.1.0-dev-b004
+;   symlink:///absolute/path/to/wled-usermod-matrix-auto-rotation
 ;
 ; Build with:
 ;   pio run -e matrix_auto_rotation_test

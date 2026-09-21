@@ -1,20 +1,24 @@
 #include "wled.h"
 #include <Wire.h>
 #include <math.h>
+#if defined(ARDUINO_ARCH_ESP32)
+#include "soc/soc_caps.h"
+#endif
 #include "matrix_auto_rotation_sensor.h"
 
 // WLED Matrix Auto Rotation
-// v0.1.0-dev build 4
+// v0.1.0-dev build 10
 //
 // Design rule: the usermod never modifies effect/segment state. Rotation is
 // applied in handleOverlayDraw(), after WLED has composited the final logical
 // raster and immediately before WLED applies its own logical->physical ledmap.
 
 namespace {
-constexpr char MAR_VERSION[] = "0.1.0-dev-b004";
+constexpr char MAR_VERSION[] = "0.1.0-dev-b010";
 constexpr uint8_t I2C_MODE_MATRIXPORTAL = 0;
 constexpr uint8_t I2C_MODE_CUSTOM = 1;
-// Legacy b002 values retained only for transparent configuration migration.
+constexpr uint8_t I2C_MODE_SHARED = 4;
+// Legacy development values retained only for transparent configuration migration.
 constexpr uint8_t I2C_MODE_LEGACY_ESP32_GENERIC = 2;
 constexpr uint8_t I2C_MODE_LEGACY_ESP32S3_DEVKIT = 3;
 
@@ -25,8 +29,11 @@ constexpr int8_t DIR_NEG_X = 1;
 constexpr int8_t DIR_POS_Y = 2;
 constexpr int8_t DIR_NEG_Y = 3;
 
-#if defined(ARDUINO_ARCH_ESP32)
+#if defined(ARDUINO_ARCH_ESP32) && defined(SOC_I2C_NUM) && (SOC_I2C_NUM > 1)
 TwoWire marCustomWire(1);
+#define MAR_HAS_DEDICATED_I2C 1
+#else
+#define MAR_HAS_DEDICATED_I2C 0
 #endif
 
 float absf(float v) { return v < 0.0f ? -v : v; }
@@ -69,6 +76,7 @@ private:
   MARAccelSample _lastSample;
   uint32_t _lastSampleAt = 0;
   uint32_t _readErrors = 0;
+  uint32_t _lastSensorInitAttemptAt = 0;
 
   int8_t _candidateDirection = DIR_UNKNOWN;
   int8_t _stableDirection = DIR_UNKNOWN;
@@ -94,9 +102,8 @@ private:
     }
     if (_sensorType > static_cast<uint8_t>(MARSensorType::MPU6050)) _sensorType = static_cast<uint8_t>(MARSensorType::LIS3DH);
 
-    // b002 briefly exposed two generic ESP32 presets. They were too broad for
-    // a board-oriented UI, so they are migrated to an equivalent Custom bus
-    // instead of silently changing the wiring that an upgraded device uses.
+    // Preserve compatibility with two legacy I2C mode values that were briefly
+    // exposed by development builds; migrate them to equivalent Custom pins.
     if (_i2cMode == I2C_MODE_LEGACY_ESP32_GENERIC) {
       _i2cMode = I2C_MODE_CUSTOM;
       _customSda = 21;
@@ -105,7 +112,7 @@ private:
       _i2cMode = I2C_MODE_CUSTOM;
       _customSda = 8;
       _customScl = 9;
-    } else if (_i2cMode != I2C_MODE_MATRIXPORTAL && _i2cMode != I2C_MODE_CUSTOM) {
+    } else if (_i2cMode != I2C_MODE_MATRIXPORTAL && _i2cMode != I2C_MODE_CUSTOM && _i2cMode != I2C_MODE_SHARED) {
       _i2cMode = I2C_MODE_MATRIXPORTAL;
     }
 
@@ -145,9 +152,12 @@ private:
   }
 
   void stopCustomBus() {
-#if defined(ARDUINO_ARCH_ESP32)
+#if MAR_HAS_DEDICATED_I2C
     if (_customBusStarted) marCustomWire.end();
 #endif
+    // On single-controller ESP32 targets (e.g. ESP32-C3), Custom mode uses
+    // the global Wire instance. Do not end it here because other WLED
+    // components may also be sharing that physical bus.
     _customBusStarted = false;
   }
 
@@ -160,6 +170,13 @@ private:
       // authoritative; this path is hardware-qualified on the test unit.
       Wire.begin();
       Wire.setClock(400000);
+      return &Wire;
+    }
+
+    if (_i2cMode == I2C_MODE_SHARED) {
+      // Shared mode uses WLED's already-initialized global Wire instance.
+      // Do not call begin(), end(), setPins() or setClock() here: the owner
+      // of the shared WLED I2C bus remains authoritative for pins and speed.
       return &Wire;
     }
 
@@ -182,13 +199,28 @@ private:
       return nullptr;
     }
 
+#if MAR_HAS_DEDICATED_I2C
     if (!marCustomWire.begin(_customSda, _customScl, 400000)) {
       _status = "custom I²C begin failed";
       stopCustomBus();
       return nullptr;
     }
+    marCustomWire.setClock(400000);
     _customBusStarted = true;
     return &marCustomWire;
+#else
+    // ESP32-C3 and other single-controller ESP32 variants cannot create
+    // TwoWire(1). Rebind the sole hardware controller to the configured
+    // Custom pins instead.
+    Wire.end();
+    if (!Wire.begin(_customSda, _customScl, 400000)) {
+      _status = "custom I²C begin failed";
+      return nullptr;
+    }
+    Wire.setClock(400000);
+    _customBusStarted = true;
+    return &Wire;
+#endif
 #else
     _status = "custom I²C requires ESP32";
     return nullptr;
@@ -203,6 +235,7 @@ private:
     _candidateSince = 0;
     _lastSampleAt = 0;
     _readErrors = 0;
+    _lastSensorInitAttemptAt = 0;
     _lastSample = MARAccelSample{};
   }
 
@@ -215,6 +248,28 @@ private:
       _effectiveRotation = next;
       strip.trigger();
     }
+  }
+
+  bool initializeSensor() {
+    _lastSensorInitAttemptAt = millis();
+
+    TwoWire *wire = prepareI2CBus();
+    if (!wire) {
+      _sensorReady = false;
+      return false;
+    }
+    const uint8_t effectiveAddress = (_i2cMode == I2C_MODE_CUSTOM) ? _configuredAddress : 0;
+    _sensorReady = _sensor.begin(*wire, static_cast<MARSensorType>(_sensorType), effectiveAddress);
+
+    if (_sensorReady) {
+      _status = "sensor ready";
+      DEBUG_PRINTF_P(PSTR("[MatrixAutoRotation] sensor=%s address=0x%02X init=OK\n"), _sensor.name(), _sensor.address());
+    } else {
+      _status = _sensor.initErrorText();
+      DEBUG_PRINTF_P(PSTR("[MatrixAutoRotation] sensor=%s init=FAILED (%s, WHO_AM_I=0x%02X)\n"),
+        _sensor.name(), _sensor.initErrorText(), _sensor.whoAmI());
+    }
+    return _sensorReady;
   }
 
   void initializeRuntime() {
@@ -239,18 +294,7 @@ private:
       return;
     }
 
-    TwoWire *wire = prepareI2CBus();
-    if (!wire) return;
-
-    const uint8_t effectiveAddress = (_i2cMode == I2C_MODE_CUSTOM) ? _configuredAddress : 0;
-    _sensorReady = _sensor.begin(*wire, static_cast<MARSensorType>(_sensorType), effectiveAddress);
-    if (_sensorReady) {
-      _status = "sensor ready";
-      DEBUG_PRINTF_P(PSTR("[MatrixAutoRotation] sensor=%s address=0x%02X init=OK\n"), _sensor.name(), _sensor.address());
-    } else {
-      _status = "sensor not found";
-      DEBUG_PRINTF_P(PSTR("[MatrixAutoRotation] sensor=%s init=FAILED\n"), _sensor.name());
-    }
+    initializeSensor();
   }
 
   bool orientationAllowed(uint8_t q) const {
@@ -348,7 +392,7 @@ private:
 
   const char *configuredSensorName() const {
     return _sensorType == static_cast<uint8_t>(MARSensorType::MPU6050)
-      ? "GY-521 (MPU-6050)"
+      ? "MPU-6050 / ICM-20689"
       : "LIS3DH";
   }
 
@@ -373,8 +417,16 @@ public:
       _needsReinit = false;
       initializeRuntime();
     }
-    if (!_enabled || !_autoRotationEnabled || !_sensorReady) return;
-    pollSensor(millis());
+    if (!_enabled || !_autoRotationEnabled) return;
+    const uint32_t now = millis();
+    if (!_sensorReady) {
+      // In Shared mode WLED or another usermod may initialize the global Wire bus after this usermod
+      // setup() runs. Retry without ever reconfiguring or taking ownership of
+      // the bus. This also recovers if the owning usermod restarts its sensor.
+      if (_i2cMode == I2C_MODE_SHARED && uint32_t(now - _lastSensorInitAttemptAt) >= 1000u) initializeSensor();
+      return;
+    }
+    pollSensor(now);
   }
 
   void handleOverlayDraw() override {
@@ -441,9 +493,21 @@ public:
     JsonArray status = user.createNestedArray(F("MAR status"));
     status.add(sensorStatusText());
 
+    JsonArray busMode = user.createNestedArray(F("MAR I²C mode"));
+    busMode.add(_i2cMode == I2C_MODE_SHARED ? "Shared (WLED Wire)" : (_i2cMode == I2C_MODE_CUSTOM ? "Custom" : "Matrix Portal"));
+
     char sensorText[48];
-    if (_sensorReady) snprintf(sensorText, sizeof(sensorText), "%s @ 0x%02X", _sensor.name(), _sensor.address());
-    else snprintf(sensorText, sizeof(sensorText), "%s", configuredSensorName());
+    if (_sensorReady) {
+      snprintf(sensorText, sizeof(sensorText), "%s @ 0x%02X | ID 0x%02X", _sensor.name(), _sensor.address(), _sensor.whoAmI());
+    } else if (!_initDone || !_autoRotationEnabled) {
+      snprintf(sensorText, sizeof(sensorText), "%s | not active", configuredSensorName());
+    } else if (_status && strcmp(_status, "sensor ready") != 0 && _sensor.initError() == MARSensorInitError::NONE) {
+      // Failure happened before sensor.begin(), for example while preparing I²C.
+      // Do not misleadingly report the sensor as OK.
+      snprintf(sensorText, sizeof(sensorText), "%s | not initialized", configuredSensorName());
+    } else {
+      snprintf(sensorText, sizeof(sensorText), "%s | %s", configuredSensorName(), _sensor.initErrorText());
+    }
     JsonArray sensor = user.createNestedArray(F("MAR sensor"));
     sensor.add(sensorText);
 
@@ -480,7 +544,7 @@ public:
     top["sensor-mounting"] = _sensorMountingDeg;
 
     // Keep all bus-related controls in one visible I²C section. Only the
-    // Matrix Portal preset and Custom mode are exposed in the current UI.
+    // Matrix Portal, Shared and Custom modes are exposed in the current UI.
     JsonObject i2c = top.createNestedObject("i2c");
     i2c["mode"] = _i2cMode;
     i2c["SDA-pin"] = _customSda;
@@ -519,8 +583,7 @@ public:
       complete &= getJsonValue(i2c["SCL-pin"], _customScl, int8_t(-1));
       complete &= getJsonValue(i2c["address"], _configuredAddress, uint8_t(0));
     } else {
-      // b002: mode at top level and Custom I2C as a nested group.
-      // b001: all of these keys were flat. Both forms remain accepted.
+      // Accept both current grouped keys and legacy flat development-build keys.
       complete = false;
       getJsonValue(top["i2c-mode"], _i2cMode, uint8_t(I2C_MODE_MATRIXPORTAL));
       JsonObject custom = top["custom-I2C"];
@@ -574,13 +637,13 @@ public:
     settingsScript.print(F("addOption(dd,'0 deg',0);addOption(dd,'90 deg',90);addOption(dd,'180 deg',180);addOption(dd,'270 deg',270);"));
 
     settingsScript.print(F("dd=addDropdown('")); settingsScript.print(FPSTR(_name)); settingsScript.print(F("','sensor');"));
-    settingsScript.print(F("addOption(dd,'LIS3DH',0);addOption(dd,'GY-521 (MPU-6050)',1);"));
+    settingsScript.print(F("addOption(dd,'LIS3DH',0);addOption(dd,'MPU-6050 / ICM-20689',1);"));
 
     settingsScript.print(F("dd=addDropdown('")); settingsScript.print(FPSTR(_name)); settingsScript.print(F("','sensor-mounting');"));
     settingsScript.print(F("addOption(dd,'0 deg',0);addOption(dd,'90 deg',90);addOption(dd,'180 deg',180);addOption(dd,'270 deg',270);"));
 
     settingsScript.print(F("dd=addDropdown('")); settingsScript.print(FPSTR(_name)); settingsScript.print(F(":i2c','mode');"));
-    settingsScript.print(F("addOption(dd,'Matrix Portal',0);addOption(dd,'Custom',1);"));
+    settingsScript.print(F("addOption(dd,'Matrix Portal',0);addOption(dd,'Shared',4);addOption(dd,'Custom',1);"));
 
     settingsScript.print(F("dd=addDropdown('")); settingsScript.print(FPSTR(_name)); settingsScript.print(F(":i2c','address');"));
     settingsScript.print(F("addOption(dd,'Auto',0);addOption(dd,'0x18',24);addOption(dd,'0x19',25);addOption(dd,'0x68',104);addOption(dd,'0x69',105);"));

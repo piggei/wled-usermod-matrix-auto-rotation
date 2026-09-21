@@ -1,5 +1,4 @@
 #include "matrix_auto_rotation_sensor.h"
-
 namespace {
 constexpr uint8_t LIS3DH_ADDR_PRIMARY = 0x19;   // MatrixPortal S3 onboard sensor
 constexpr uint8_t LIS3DH_ADDR_SECONDARY = 0x18;
@@ -14,13 +13,29 @@ constexpr uint8_t MPU6050_ADDR_SECONDARY = 0x69;
 constexpr uint8_t MPU6050_REG_SMPLRT_DIV = 0x19;
 constexpr uint8_t MPU6050_REG_CONFIG = 0x1A;
 constexpr uint8_t MPU6050_REG_ACCEL_CONFIG = 0x1C;
+constexpr uint8_t MPU_FAMILY_REG_ACCEL_CONFIG2 = 0x1D;
 constexpr uint8_t MPU6050_REG_ACCEL_XOUT_H = 0x3B;
 constexpr uint8_t MPU6050_REG_PWR_MGMT_1 = 0x6B;
 constexpr uint8_t MPU6050_REG_WHO_AM_I = 0x75;
 }
 
 const char *MARAccelerometer::name() const {
-  return _type == MARSensorType::MPU6050 ? "GY-521 (MPU-6050)" : "LIS3DH";
+  if (_type != MARSensorType::MPU6050) return "LIS3DH";
+  if (_whoAmI == 0x98) return "ICM-20689";
+  if (_whoAmI == 0x68 || _whoAmI == 0x69) return "MPU-6050";
+  return "MPU-6050 / ICM-20689";
+}
+
+const char *MARAccelerometer::initErrorText() const {
+  switch (_initError) {
+    case MARSensorInitError::NO_RESPONSE: return "no I2C response";
+    case MARSensorInitError::WHO_AM_I_READ_FAILED: return "WHO_AM_I read failed";
+    case MARSensorInitError::WHO_AM_I_MISMATCH: return "WHO_AM_I mismatch";
+    case MARSensorInitError::CONFIG_WRITE_FAILED: return "sensor config write failed";
+    case MARSensorInitError::CONFIG_VERIFY_FAILED: return "sensor config verify failed";
+    case MARSensorInitError::NONE:
+    default: return "OK";
+  }
 }
 
 bool MARAccelerometer::begin(TwoWire &wire, MARSensorType type, uint8_t configuredAddress) {
@@ -28,6 +43,8 @@ bool MARAccelerometer::begin(TwoWire &wire, MARSensorType type, uint8_t configur
   _type = type;
   _address = 0;
   _ready = false;
+  _whoAmI = 0;
+  _initError = MARSensorInitError::NONE;
 
   if (configuredAddress != 0) {
     if (!probeAddress(configuredAddress)) return false;
@@ -46,45 +63,82 @@ bool MARAccelerometer::begin(TwoWire &wire, MARSensorType type, uint8_t configur
   return _ready;
 }
 
+
 bool MARAccelerometer::probeAddress(uint8_t address) {
   if (!_wire) return false;
-
   _wire->beginTransmission(address);
-  if (_wire->endTransmission() != 0) return false;
+  if (_wire->endTransmission() != 0) {
+    _initError = MARSensorInitError::NO_RESPONSE;
+    return false;
+  }
 
   const uint8_t previous = _address;
   _address = address;
   uint8_t who = 0;
   const bool readOk = readRegister(_type == MARSensorType::LIS3DH ? LIS3DH_REG_WHO_AM_I : MPU6050_REG_WHO_AM_I, who);
   _address = previous;
-  if (!readOk) return false;
+  if (!readOk) {
+    _initError = MARSensorInitError::WHO_AM_I_READ_FAILED;
+    return false;
+  }
 
-  if (_type == MARSensorType::LIS3DH) return who == LIS3DH_WHO_AM_I;
-  // Genuine MPU-6050 parts normally return 0x68. Accept 0x69 as well for
-  // compatible modules/clones that reflect AD0 in WHO_AM_I.
-  return who == 0x68 || who == 0x69;
+  _whoAmI = who;
+  const bool matches = (_type == MARSensorType::LIS3DH)
+    ? (who == LIS3DH_WHO_AM_I)
+    : (who == 0x68 || who == 0x69 || who == 0x98);
+  if (!matches) {
+    _initError = MARSensorInitError::WHO_AM_I_MISMATCH;
+    return false;
+  }
+
+  _initError = MARSensorInitError::NONE;
+  return true;
 }
 
 bool MARAccelerometer::initLIS3DH() {
   // 50 Hz, XYZ enabled.
-  if (!writeRegister(LIS3DH_REG_CTRL1, 0x47)) return false;
-  // BDU + high-resolution mode, +/-2 g.
-  if (!writeRegister(LIS3DH_REG_CTRL4, 0x88)) return false;
+  if (!writeRegister(LIS3DH_REG_CTRL1, 0x47) ||
+      !writeRegister(LIS3DH_REG_CTRL4, 0x88)) {
+    _initError = MARSensorInitError::CONFIG_WRITE_FAILED;
+    return false;
+  }
   delay(5);
+  _initError = MARSensorInitError::NONE;
   return true;
 }
 
 bool MARAccelerometer::initMPU6050() {
   // Wake device and use X-axis gyro PLL as the clock source.
-  if (!writeRegister(MPU6050_REG_PWR_MGMT_1, 0x01)) return false;
+  if (!writeRegister(MPU6050_REG_PWR_MGMT_1, 0x01)) {
+    _initError = MARSensorInitError::CONFIG_WRITE_FAILED;
+    return false;
+  }
+  delay(10);
+
+  // Common MPU-60x0 / ICM-20689 setup: 50 Hz output and +/-2g.
+  // On ICM-20689 the accelerometer has its own DLPF register (0x1D),
+  // while MPU-6050 uses the common CONFIG path.
+  if (!writeRegister(MPU6050_REG_CONFIG, 0x03) ||
+      !writeRegister(MPU6050_REG_SMPLRT_DIV, 19) ||
+      !writeRegister(MPU6050_REG_ACCEL_CONFIG, 0x00) ||
+      (_whoAmI == 0x98 && !writeRegister(MPU_FAMILY_REG_ACCEL_CONFIG2, 0x03))) {
+    _initError = MARSensorInitError::CONFIG_WRITE_FAILED;
+    return false;
+  }
   delay(5);
-  // DLPF ~44 Hz (gyro) / ~42 Hz (accelerometer).
-  if (!writeRegister(MPU6050_REG_CONFIG, 0x03)) return false;
-  // 1 kHz / (1 + 19) = 50 Hz internal sample cadence with DLPF enabled.
-  if (!writeRegister(MPU6050_REG_SMPLRT_DIV, 19)) return false;
-  // Accelerometer full scale +/-2 g.
-  if (!writeRegister(MPU6050_REG_ACCEL_CONFIG, 0x00)) return false;
-  delay(5);
+
+  // Read back the relevant bits. This catches wiring/power problems and
+  // modules that ACK the address but are not behaving like a supported MPU-family device.
+  if (!verifyRegisterMasked(MPU6050_REG_PWR_MGMT_1, 0x47, 0x01) ||
+      !verifyRegisterMasked(MPU6050_REG_CONFIG, 0x07, 0x03) ||
+      !verifyRegisterMasked(MPU6050_REG_SMPLRT_DIV, 0xFF, 19) ||
+      !verifyRegisterMasked(MPU6050_REG_ACCEL_CONFIG, 0x18, 0x00) ||
+      (_whoAmI == 0x98 && !verifyRegisterMasked(MPU_FAMILY_REG_ACCEL_CONFIG2, 0x0F, 0x03))) {
+    _initError = MARSensorInitError::CONFIG_VERIFY_FAILED;
+    return false;
+  }
+
+  _initError = MARSensorInitError::NONE;
   return true;
 }
 
@@ -126,10 +180,13 @@ bool MARAccelerometer::readRegister(uint8_t reg, uint8_t &value) {
 }
 
 bool MARAccelerometer::readRegisters(uint8_t reg, uint8_t *data, size_t len, bool lisAutoIncrement) {
-  if (!_wire || !_address || !data || !len) return false;
+  if (!_address || !data || !len) return false;
+  const uint8_t registerAddress = lisAutoIncrement ? uint8_t(reg | 0x80u) : reg;
 
+
+  if (!_wire) return false;
   _wire->beginTransmission(_address);
-  _wire->write(lisAutoIncrement ? uint8_t(reg | 0x80u) : reg);
+  _wire->write(registerAddress);
   if (_wire->endTransmission(false) != 0) return false;
 
   const size_t received = _wire->requestFrom(_address, static_cast<uint8_t>(len), true);
@@ -141,8 +198,16 @@ bool MARAccelerometer::readRegisters(uint8_t reg, uint8_t *data, size_t len, boo
   return true;
 }
 
+bool MARAccelerometer::verifyRegisterMasked(uint8_t reg, uint8_t mask, uint8_t expected) {
+  uint8_t value = 0;
+  return readRegister(reg, value) && ((value & mask) == (expected & mask));
+}
+
 bool MARAccelerometer::writeRegister(uint8_t reg, uint8_t value) {
-  if (!_wire || !_address) return false;
+  if (!_address) return false;
+
+
+  if (!_wire) return false;
   _wire->beginTransmission(_address);
   _wire->write(reg);
   _wire->write(value);

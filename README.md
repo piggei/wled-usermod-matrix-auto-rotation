@@ -1,29 +1,25 @@
 # WLED Matrix Auto Rotation
 
-**Version:** `0.1.0-dev`  
-**Build:** `4` (`b004`)  
-**Status:** Matrix Portal/LIS3DH rotation path hardware-validated; UI refinement build
+**Version:** `0.1.0-dev-b010`  
+**Status:** development baseline; LIS3DH, ICM-20689 and Shared I²C hardware-validated
 
-A standalone WLED usermod that rotates the **final 2D matrix raster** according to an accelerometer, without changing effect or segment state.
+A standalone WLED usermod that automatically rotates the **final 2D matrix raster** according to an accelerometer, without changing effect or segment state.
 
-## Build 4 focus
+## Features
 
-Build 4 keeps the hardware-validated rotation engine unchanged and continues the configuration/UI cleanup:
+- 0° / 90° / 180° / 270° automatic matrix rotation.
+- Configurable base (`Setup Rotation`) and sensor mounting rotation.
+- Per-orientation allow mask.
+- Threshold, hysteresis, stable time and polling controls under `Advanced`.
+- LIS3DH backend.
+- MPU-6050 / ICM-20689 backend.
+- Matrix Portal, Shared and Custom I²C modes.
+- No third-party accelerometer library required.
+- PlatformIO-ready out-of-tree WLED usermod.
 
-- all ordinary field labels end with `:` to match the rest of WLED;
-- the separator immediately below the module title is removed;
-- extra spacing is added after `Setup Rotation:`;
-- the bus controls are grouped under an `I²C` section;
-- the bus selector contains only `Matrix Portal` and `Custom`;
-- Custom SDA/SCL/address fields appear only when `Custom` is selected;
-- `Allow Rotation` is a larger bold subsection and its four checkboxes are displayed on one row when space permits;
-- `Advanced:` remains a checkbox and reveals the four tuning parameters only when enabled.
+## Architecture
 
-## Important architecture rule
-
-The usermod does **not** rotate individual effects and does not alter segment render buffers.
-
-WLED composites segments into its final logical pixel buffer and then calls `handleOverlayDraw()` immediately before the logical-to-physical LED mapping/output stage. The usermod rotates that final logical matrix area there.
+Rotation is applied in `handleOverlayDraw()` after WLED has composited the logical matrix raster and before WLED performs its logical-to-physical LED mapping/output.
 
 ```text
 WLED effects / segments
@@ -41,137 +37,144 @@ WLED ledmap / physical mapping
 LED output
 ```
 
-Existing WLED ledmaps remain downstream of the usermod transform.
+The usermod therefore does not rotate individual effects, modify segment state, or replace WLED's physical ledmap.
 
-## Rotation composition
+## Rotation model
 
-The configured setup rotation is the base/reference rotation:
+The configured setup rotation is the installation reference:
 
 ```text
 effective = setupRotation + autoRotation  (mod 360)
 ```
 
-Sensor mounting is removed from the raw sensor-derived orientation before the automatic rotation is composed:
+Sensor mounting compensates for a sensor installed at a different quarter-turn angle from the display:
 
 ```text
 autoRotation = rawSensorRotation - sensorMounting  (mod 360)
 ```
 
-`setup-rotation` was hardware-tested in b001 and composes correctly with the automatic rotation.
-
-## Matrix Portal S3 / LIS3DH
-
-The following mapping was measured on the physical Matrix Portal S3 and inherited from the hardware-tested iDotMatrix Build 164:
+The Matrix Portal axis convention validated on hardware is:
 
 | Physical panel orientation | Gravity direction | Auto rotation |
 | --- | --- | --- |
-| 0 deg | +Y | 0 deg |
-| 90 deg clockwise | +X | 90 deg |
-| 180 deg | -Y | 180 deg |
-| 270 deg clockwise | -X | 270 deg |
+| 0° | +Y | 0° |
+| 90° clockwise | +X | 90° |
+| 180° | -Y | 180° |
+| 270° clockwise | -X | 270° |
 
-Defaults:
+Qualified defaults are **0.55 g** threshold, **0.12 g** hysteresis, **600 ms** stable time and **100 ms** polling. If neither X nor Y dominates sufficiently, the last stable orientation is preserved; Z is not used to invent an orientation while the panel is nearly flat.
 
-- polling: **100 ms**
-- stable time: **600 ms**
-- minimum dominant X/Y axis: **0.55 g**
-- diagonal hysteresis: **0.12 g**
+## Supported sensors
 
-If neither X nor Y reaches the threshold, the last stable orientation is preserved. Z is not used to invent an orientation while the panel is lying nearly flat.
+| Sensor | Addresses | Status |
+| --- | --- | --- |
+| LIS3DH | `0x19`, `0x18` | **Hardware-tested** on Matrix Portal S3 |
+| ICM-20689 | `0x68`, `0x69`; `WHO_AM_I 0x98` | **Hardware-tested** on ESP32-C3 |
+| MPU-6050 | `0x68`, `0x69`; `WHO_AM_I 0x68/0x69` | Implemented; dedicated hardware test pending |
 
-## Sensor backends
+Both backends use a ±2 g accelerometer range and a 50 Hz sensor cadence. The ICM-20689 backend configures its dedicated accelerometer DLPF register as required.
 
-### LIS3DH
-
-- Auto-address order: `0x19`, then `0x18`.
-- Matrix Portal S3 onboard LIS3DH is expected at `0x19`.
-- +/-2 g, high-resolution mode.
-- 50 Hz sensor data rate.
-
-### GY-521 / MPU-6050
-
-- Auto-address order: `0x68`, then `0x69`.
-- +/-2 g accelerometer range.
-- DLPF enabled.
-- 50 Hz internal sample cadence.
-- Backend implemented but still awaiting hardware qualification.
-
-No third-party accelerometer library is required; both chips are accessed directly over I²C.
+> Some modules sold as GY-521/MPU-6050 may contain a compatible device such as ICM-20689. WLED Info reports the detected chip and `WHO_AM_I` value.
 
 ## I²C modes
 
-| UI mode | SDA | SCL | Address | Qualification |
-| --- | ---: | ---: | --- | --- |
-| Matrix Portal | board variant (`16`) | board variant (`17`) | automatic probe | **hardware-tested** |
-| Custom | user selected | user selected | Auto or explicit | depends on target |
+| Mode | Behavior | Typical use |
+| --- | --- | --- |
+| **Matrix Portal** | Initializes the board-default `Wire` bus and probes the sensor address automatically | Matrix Portal S3 / onboard LIS3DH |
+| **Shared** | Uses WLED's already initialized global `Wire` bus without changing pins, clock or ownership | Multiple I²C devices on the same SDA/SCL pair |
+| **Custom** | Uses configured SDA/SCL pins; explicit or automatic sensor address | Dedicated/custom wiring |
+
+### Shared I²C
+
+`Shared` is deliberately non-owning: MAR does not reserve SDA/SCL, call `Wire.begin()`/`Wire.end()`, change pins, or change the bus clock. If the bus owner initializes after MAR, sensor initialization is retried automatically.
+
+This mode has been hardware-tested on ESP32-C3 with both devices on the same physical bus:
+
+- PAJ7620 at `0x73`;
+- ICM-20689 at `0x68`.
+
+Both operate concurrently because their addresses differ.
+
+On single-controller devices such as ESP32-C3, use `Shared` when another WLED component already owns the I²C bus. `Custom` necessarily rebinds that controller to the selected pins.
 
 ## Configuration UI
 
-In **Config -> Usermods -> MatrixAutoRotation** the configuration page appears as shown below:
+Open **Config → Usermods → MatrixAutoRotation**.
 
 ![Matrix Auto Rotation usermod settings](docs/images/configuration.png)
 
+The four detection/timing parameters are hidden until `Advanced:` is enabled. `Allow Rotation` controls which quarter-turn orientations may be accepted; at least one orientation is always retained.
 
-The four Advanced values are hidden while `Advanced:` is unchecked. At least one allowed orientation is always enforced; if all four are disabled, `0` is restored automatically.
+The screenshot illustrates the configuration layout. Available I²C modes in the current build are `Matrix Portal`, `Shared` and `Custom`.
 
 ## Rectangular matrices
 
-Because a 90/270 degree turn swaps width and height and this usermod deliberately does not reconfigure WLED geometry:
+A 90°/270° rotation swaps width and height. Because this usermod deliberately does not crop, resize or reconfigure WLED's matrix geometry:
 
-- square matrix: `0 / 90 / 180 / 270` supported;
-- rectangular matrix: `0 / 180` supported;
-- rectangular matrix + effective `90 / 270`: raster is left unchanged and WLED Info reports the unsupported rotation.
+- square matrices support 0° / 90° / 180° / 270°;
+- rectangular matrices support 0° / 180°;
+- an effective 90°/270° on a rectangular matrix leaves the raster unchanged and is reported in WLED Info.
 
-There is no crop, resize, or implicit geometry change.
+## PlatformIO / WLED integration
 
-## PlatformIO / external usermod integration
+The repository is an out-of-tree WLED usermod using `library.json` and `REGISTER_USERMOD()`.
 
-The repository is laid out as a PlatformIO-compatible **out-of-tree WLED usermod** (`library.json` + `REGISTER_USERMOD()`). It is loaded by WLED through `custom_usermods`.
+Example `platformio_override.ini` entry:
 
 ```ini
 [env:matrix_auto_rotation_test]
 extends = env:YOUR_WORKING_WLED_ENV
 custom_usermods =
   ${env:YOUR_WORKING_WLED_ENV.custom_usermods}
-  symlink:///absolute/path/to/wled-usermod-matrix-auto-rotation-v0.1.0-dev-b004
+  symlink:///absolute/path/to/wled-usermod-matrix-auto-rotation
 ```
 
-Then:
+Build and upload with:
 
 ```bash
 pio run -e matrix_auto_rotation_test
 pio run -e matrix_auto_rotation_test -t upload
 ```
 
-See `platformio_override.ini.sample` and `docs/PLATFORMIO.md`.
+See [`docs/PLATFORMIO.md`](docs/PLATFORMIO.md) and `platformio_override.ini.sample`.
 
-## Recommended Matrix Portal test configuration
+## WLED Info diagnostics
 
-```text
-enabled             = true
-setup-rotation       = 0
-auto-rotation        = true
-sensor               = LIS3DH
-sensor-mounting      = 0
-i2c.mode             = Matrix Portal
-advanced             = false
-allow rotation       = 0 / 90 / 180 / 270 enabled
-```
+The usermod reports:
 
-With Advanced hidden, the qualified defaults remain active.
+- build/version and status;
+- I²C mode;
+- detected sensor, address and device ID;
+- live X/Y/Z acceleration;
+- stable axis, automatic rotation, setup rotation and effective rotation;
+- matrix geometry and read-error diagnostics.
 
-## Known limitations / deliberate choices
+These fields are intended to make sensor wiring and orientation qualification possible without adding debug code.
 
-- Matrix Portal S3 + LIS3DH and setup/base rotation are hardware-qualified from b001.
-- GY-521 / MPU-6050 remains to be tested on hardware.
-- Custom I²C uses ESP32 `Wire1`. Pins are checked for validity/conflicts but are not claimed with a borrowed/fake Usermod ID.
-- Per-pixel WLED CCT metadata is not rotated. This does not affect the target Matrix Portal HUB75 RGB matrix or ordinary RGB/RGBW pixel matrices.
-- No attempt is made to infer orientation from Z while the panel is flat.
+## Hardware validation matrix
+
+| Function | Hardware | Result |
+| --- | --- | --- |
+| LIS3DH detection and XYZ | Matrix Portal S3 | PASS |
+| Automatic 0/90/180/270 rotation | Matrix Portal S3 + LIS3DH | PASS |
+| Setup Rotation composition | Matrix Portal S3 + LIS3DH | PASS |
+| ICM-20689 detection and XYZ | ESP32-C3 | PASS |
+| Automatic rotation | ESP32-C3 + ICM-20689 | PASS |
+| Custom I²C on single-controller ESP32 | ESP32-C3 | PASS |
+| Shared I²C coexistence | ESP32-C3 + PAJ7620 + ICM-20689 | PASS |
+| MPU-6050-specific hardware | — | Pending |
+
+## Known limitations
+
+- Per-pixel WLED CCT metadata is not rotated. This does not affect the tested RGB matrix targets.
+- Orientation is derived from X/Y gravity only; Z is intentionally ignored for orientation selection.
+- 90°/270° rotation of rectangular matrices is intentionally not performed.
+- MPU-6050 support is implemented but has not yet been qualified on a confirmed MPU-6050 device.
 
 ## Origin of the orientation algorithm
 
-The orientation classifier and Matrix Portal axis convention are derived from the hardware-tested `IDotMatrix-ESP32-Emulator 0.6.0-dev Build 164` supplied during development. The qualified threshold/hysteresis/stability behavior and output-to-source rotation convention are unchanged.
+The orientation classifier and Matrix Portal axis convention are derived from the hardware-tested `IDotMatrix-ESP32-Emulator 0.6.0-dev Build 164` used during development. Its threshold/hysteresis/stability behavior and output-to-source rotation convention were retained.
 
 ## License
 
-MIT. See `LICENSE`.
+MIT. See [`LICENSE`](LICENSE).

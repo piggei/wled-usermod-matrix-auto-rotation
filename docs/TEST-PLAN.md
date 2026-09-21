@@ -1,96 +1,114 @@
-# v0.1.0-dev b004 test plan
+# v0.1.0-dev-b010 validation plan
 
-b004 keeps the b001/b002 rotation engine unchanged. Matrix Portal + onboard LIS3DH auto-rotation and Setup Rotation are already hardware-confirmed. This build primarily needs UI regression testing.
+This plan covers current behavior only. Historical development-build migrations are regression-tested in code/config handling but are intentionally omitted from the user-facing test procedure.
 
-## A. UI layout
+## 1. Configuration UI
 
-### A1 - Standard labels
+Verify:
 
-Confirm these visible field labels end with `:`:
+- normal field labels end with `:`;
+- `I²C` is shown as a section heading;
+- modes are `Matrix Portal`, `Shared`, `Custom`;
+- SDA/SCL/Address appear only for `Custom`;
+- `Advanced:` reveals Threshold G, Hysteresis G, Stable Ms and Poll Ms;
+- `Allow Rotation` displays 0 / 90 / 180 / 270 and prevents an empty allow mask.
 
-- Enabled:
-- Setup Rotation:
-- Auto Rotation:
-- Sensor:
-- Sensor Mounting:
-- Mode:
-- SDA Pin: / SCL Pin: / Address: when Custom is selected
-- Advanced:
-- Threshold G: / Hysteresis G: / Stable Ms: / Poll Ms: when Advanced is enabled
+## 2. Matrix Portal S3 + LIS3DH regression
 
-The orientation values inside `Allow Rotation` remain plain `0 / 90 / 180 / 270` and are not field titles.
+Configuration:
 
-### A2 - Separators and spacing
-
-Expected:
-
-- no thin separator between `MatrixAutoRotation` and `Enabled:`;
-- visible spacing after `Setup Rotation:`;
-- no thin separator immediately below the I²C controls;
-- subsection titles rely on spacing/typography rather than extra rules.
-
-### A3 - I²C section
-
-Expected section title: `I²C` with the `2` raised.
-
-Mode choices must be exactly:
-
-- Matrix Portal
-- Custom
-
-With `Matrix Portal`, SDA Pin, SCL Pin and Address are hidden.
-With `Custom`, all three appear immediately and can be edited.
-
-### A4 - Allow Rotation
+- Sensor: `LIS3DH`
+- I²C Mode: `Matrix Portal`
+- Sensor Mounting: `0°`
+- Setup Rotation: `0°`
+- all rotations allowed
 
 Expected:
 
-- `Allow Rotation` is larger and bold;
-- checkboxes `0 / 90 / 180 / 270` are on one row at normal desktop width;
-- the row may wrap on a narrow/mobile viewport;
-- saving/restoring each checkbox works.
+| Physical orientation | Axis | Auto |
+| --- | --- | ---: |
+| 0° | +Y | 0° |
+| 90° CW | +X | 90° |
+| 180° | -Y | 180° |
+| 270° CW | -X | 270° |
 
-### A5 - Advanced
+Also verify Setup Rotation at 90° composes with automatic rotation rather than replacing it.
 
-With `Advanced:` unchecked, the four tuning controls are hidden.
-With it checked, Threshold G, Hysteresis G, Stable Ms and Poll Ms appear.
-Saving and reloading must preserve both the checkbox and values.
+## 3. Detection stability
 
-## B. Configuration migration
+Using qualified defaults (0.55 g / 0.12 g / 600 ms / 100 ms):
 
-### B1 - b001
+1. Hold near a 45° diagonal: no X/Y chatter.
+2. Cross into another orientation for less than 600 ms: no accepted rotation.
+3. Hold a new orientation for more than 600 ms: one clean rotation.
+4. Lay the panel nearly flat: preserve the last stable orientation.
+5. Return upright: detection resumes normally.
+6. Disable one or more orientations and verify disallowed candidates are ignored.
 
-Upgrade a configuration with the old flat I²C and allow keys. Values must be retained and rewritten in the current grouped structure after save.
+## 4. ICM-20689 on ESP32-C3
 
-### B2 - b002 Matrix Portal / Custom
+Known-qualified device:
 
-Both modes and their values must survive unchanged.
+- address `0x68`;
+- `WHO_AM_I = 0x98`.
 
-### B3 - b002 removed presets
+Expected WLED Info:
 
-Legacy mode `ESP32 Generic / DevKit (21/22)` must migrate to Custom SDA 21 / SCL 22.
-Legacy mode `ESP32-S3 DevKitC-1 (8/9)` must migrate to Custom SDA 8 / SCL 9.
+- `MAR status: sensor ready`;
+- sensor identified as `ICM-20689`;
+- non-zero live X/Y/Z values;
+- automatic rotation follows the same four-orientation behavior as LIS3DH after any required `Sensor Mounting` offset.
 
-## C. Matrix Portal regression
+## 5. Shared I²C coexistence on ESP32-C3
 
-Use LIS3DH, Matrix Portal, address Auto, all rotations allowed, and the qualified defaults:
+Connect both sensors to the same physical SDA/SCL pair:
 
-- Threshold: 0.55 g
-- Hysteresis: 0.12 g
-- Stable time: 600 ms
-- Poll interval: 100 ms
+- PAJ7620: `0x73`;
+- ICM-20689: `0x68`.
 
-Confirm physical orientation mapping remains:
+Configure the bus owner normally and set Matrix Auto Rotation to `Shared`.
 
-| Physical panel | Expected automatic rotation |
-| --- | ---: |
-| +Y upright | 0° |
-| +X | 90° |
-| -Y | 180° |
-| -X | 270° |
+Expected:
 
-Also recheck Setup Rotation at least at 0° and 90° to ensure the UI-only changes did not affect composition.
+- `MAR I²C mode: Shared (WLED Wire)`;
+- PAJ7620 remains connected and gestures remain functional;
+- ICM-20689 remains detected and automatic rotation works;
+- MAR does not change bus pins or clock;
+- a late-initialized shared bus is recovered by MAR's periodic sensor-init retry.
 
-## D. GY-521 / MPU-6050
+## 6. Custom I²C
 
-Deferred until the test wiring is soldered. Use Custom I²C and start with address Auto.
+On a board/pin pair not already owned by WLED:
+
+- configure valid SDA/SCL;
+- leave Address on Auto first;
+- verify sensor detection and XYZ;
+- verify explicit supported address selection;
+- verify invalid/equal/conflicting pins are rejected without destabilizing WLED.
+
+On single-controller ESP32 targets, document that Custom rebinds the sole controller; use Shared instead when another component already owns the bus.
+
+## 7. Rectangular matrix guard
+
+For a non-square matrix:
+
+- 0° and 180° must rotate normally;
+- effective 90°/270° must leave the raster unchanged;
+- WLED Info must report the unsupported rotation condition;
+- no crop, resize or geometry mutation is allowed.
+
+## 8. Diagnostics and error paths
+
+Verify meaningful status for:
+
+- no I²C response;
+- WHO_AM_I read failure/mismatch;
+- configuration write/read-back failure;
+- framebuffer allocation failure;
+- unsupported rectangular rotation.
+
+A failure before `sensor.begin()` must never be displayed as sensor `OK`.
+
+## 9. Pending hardware qualification
+
+A confirmed MPU-6050 device still requires a dedicated hardware pass. Expected IDs are `0x68`/`0x69`; repeat sections 3, 4 and 6 when available.
