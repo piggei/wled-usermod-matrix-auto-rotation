@@ -7,14 +7,14 @@
 #include "matrix_auto_rotation_sensor.h"
 
 // WLED Matrix Auto Rotation
-// v0.1.0-dev build 10
+// v0.1.0-dev build 11
 //
 // Design rule: the usermod never modifies effect/segment state. Rotation is
 // applied in handleOverlayDraw(), after WLED has composited the final logical
 // raster and immediately before WLED applies its own logical->physical ledmap.
 
 namespace {
-constexpr char MAR_VERSION[] = "0.1.0-dev-b010";
+constexpr char MAR_VERSION[] = "0.1.0-dev-b011";
 constexpr uint8_t I2C_MODE_MATRIXPORTAL = 0;
 constexpr uint8_t I2C_MODE_CUSTOM = 1;
 constexpr uint8_t I2C_MODE_SHARED = 4;
@@ -50,6 +50,7 @@ private:
   bool _autoRotationEnabled = true;
   uint16_t _setupRotationDeg = 0;
   uint16_t _sensorMountingDeg = 0;
+  bool _invertRotation = false;
   uint8_t _sensorType = static_cast<uint8_t>(MARSensorType::LIS3DH);
   uint8_t _i2cMode = I2C_MODE_MATRIXPORTAL;
   int8_t _customSda = -1;
@@ -338,7 +339,13 @@ private:
 
   int8_t normalizeSensorRotation(uint8_t rawRotation) const {
     const uint8_t mounting = quarterTurnsFromDegrees(_sensorMountingDeg);
-    const uint8_t normalized = normalizeQuarterTurns(int(rawRotation) - int(mounting));
+    uint8_t normalized = normalizeQuarterTurns(int(rawRotation) - int(mounting));
+
+    // When the sensor board is mounted on the opposite face of the enclosure,
+    // the perceived quarter-turn direction is mirrored. Invert only the
+    // automatic component: Setup Rotation remains the installation reference.
+    if (_invertRotation) normalized = normalizeQuarterTurns(-int(normalized));
+
     return orientationAllowed(normalized) ? int8_t(normalized) : ORIENT_UNKNOWN;
   }
 
@@ -518,8 +525,8 @@ public:
 
     char orientText[96];
     const int stableAutoDeg = _stableAutoRotation == ORIENT_UNKNOWN ? -1 : int(degreesFromQuarterTurns(uint8_t(_stableAutoRotation)));
-    snprintf(orientText, sizeof(orientText), "axis %s | auto %d | setup %u | effective %u",
-      directionName(_stableDirection), stableAutoDeg, _setupRotationDeg, degreesFromQuarterTurns(_effectiveRotation));
+    snprintf(orientText, sizeof(orientText), "axis %s | auto %d | setup %u | invert %s | effective %u",
+      directionName(_stableDirection), stableAutoDeg, _setupRotationDeg, _invertRotation ? "on" : "off", degreesFromQuarterTurns(_effectiveRotation));
     JsonArray orient = user.createNestedArray(F("MAR orientation"));
     orient.add(orientText);
 
@@ -542,6 +549,7 @@ public:
     top["auto-rotation"] = _autoRotationEnabled;
     top["sensor"] = _sensorType;
     top["sensor-mounting"] = _sensorMountingDeg;
+    top["invert-rotation"] = _invertRotation;
 
     // Keep all bus-related controls in one visible I²C section. Only the
     // Matrix Portal, Shared and Custom modes are exposed in the current UI.
@@ -574,6 +582,7 @@ public:
     complete &= getJsonValue(top["auto-rotation"], _autoRotationEnabled, true);
     complete &= getJsonValue(top["sensor"], _sensorType, uint8_t(static_cast<uint8_t>(MARSensorType::LIS3DH)));
     complete &= getJsonValue(top["sensor-mounting"], _sensorMountingDeg, uint16_t(0));
+    complete &= getJsonValue(top["invert-rotation"], _invertRotation, false);
 
     // Grouped configuration layout.
     JsonObject i2c = top["i2c"];
@@ -666,7 +675,7 @@ public:
       "const T=(n,t)=>{let e=E(n),l=L(e);if(l)l.nodeValue=' '+t+' ';return e;};"
       "let sec=[...d.querySelectorAll('#um .sec')].find(s=>{let h=s.querySelector('h3');return h&&h.textContent=='MatrixAutoRotation';});if(!sec)return;"
       "sec.querySelectorAll('hr.sml').forEach(h=>h.remove());"
-      "T(N+'enabled','Enabled:');T(N+'setup-rotation','Setup Rotation:');T(N+'auto-rotation','Auto Rotation:');T(N+'sensor','Sensor:');T(N+'sensor-mounting','Sensor Mounting:');"
+      "T(N+'enabled','Enabled:');T(N+'setup-rotation','Setup Rotation:');T(N+'auto-rotation','Auto Rotation:');T(N+'sensor','Sensor:');T(N+'sensor-mounting','Sensor Mounting:');T(N+'invert-rotation','Invert Rotation:');"
       "T(N+'i2c:mode','Mode:');T(N+'i2c:SDA-pin','SDA Pin:');T(N+'i2c:SCL-pin','SCL Pin:');T(N+'i2c:address','Address:');"
       "T(N+'advanced','Advanced:');T(N+'advanced-settings:threshold-g','Threshold G:');T(N+'advanced-settings:hysteresis-g','Hysteresis G:');T(N+'advanced-settings:stable-ms','Stable Ms:');T(N+'advanced-settings:poll-ms','Poll Ms:');"
       "let sr=W(N+'setup-rotation');if(sr)sr.style.marginBottom='12px';"

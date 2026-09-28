@@ -1,6 +1,6 @@
 # WLED Matrix Auto Rotation
 
-**Version:** `0.1.0-dev-b010`  
+**Version:** `0.1.0-dev-b011`  
 **Status:** development baseline; LIS3DH, ICM-20689 and Shared I²C hardware-validated
 
 A standalone WLED usermod that automatically rotates the **final 2D matrix raster** according to an accelerometer, without changing effect or segment state.
@@ -9,6 +9,7 @@ A standalone WLED usermod that automatically rotates the **final 2D matrix raste
 
 - 0° / 90° / 180° / 270° automatic matrix rotation.
 - Configurable base (`Setup Rotation`) and sensor mounting rotation.
+- Optional `Invert Rotation` for sensor boards mounted on the opposite face of the enclosure.
 - Per-orientation allow mask.
 - Threshold, hysteresis, stable time and polling controls under `Advanced`.
 - LIS3DH backend.
@@ -52,6 +53,14 @@ Sensor mounting compensates for a sensor installed at a different quarter-turn a
 ```text
 autoRotation = rawSensorRotation - sensorMounting  (mod 360)
 ```
+
+If `Invert Rotation` is enabled, only the automatic component is mirrored before it is added to the setup rotation:
+
+```text
+autoRotation = -autoRotation  (mod 360)
+```
+
+This keeps 0° and 180° unchanged while swapping 90° and 270°. It is intended for installations where the accelerometer board is fixed to the opposite face (for example, back-to-back with the enclosure rather than back-to-back with the LED matrix). `Setup Rotation` remains the installation reference in both cases.
 
 The Matrix Portal axis convention validated on hardware is:
 
@@ -103,7 +112,7 @@ Open **Config → Usermods → MatrixAutoRotation**.
 
 ![Matrix Auto Rotation usermod settings](docs/images/configuration.png)
 
-The four detection/timing parameters are hidden until `Advanced:` is enabled. `Allow Rotation` controls which quarter-turn orientations may be accepted; at least one orientation is always retained.
+`Invert Rotation:` appears directly below `Sensor Mounting:`. The four detection/timing parameters are hidden until `Advanced:` is enabled. `Allow Rotation` controls which quarter-turn orientations may be accepted; at least one orientation is always retained.
 
 The screenshot illustrates the configuration layout. Available I²C modes in the current build are `Matrix Portal`, `Shared` and `Custom`.
 
@@ -146,7 +155,7 @@ The usermod reports:
 - I²C mode;
 - detected sensor, address and device ID;
 - live X/Y/Z acceleration;
-- stable axis, automatic rotation, setup rotation and effective rotation;
+- stable axis, automatic rotation, setup rotation, inversion state and effective rotation;
 - matrix geometry and read-error diagnostics.
 
 These fields are intended to make sensor wiring and orientation qualification possible without adding debug code.
@@ -158,6 +167,7 @@ These fields are intended to make sensor wiring and orientation qualification po
 | LIS3DH detection and XYZ | Matrix Portal S3 | PASS |
 | Automatic 0/90/180/270 rotation | Matrix Portal S3 + LIS3DH | PASS |
 | Setup Rotation composition | Matrix Portal S3 + LIS3DH | PASS |
+| Invert Rotation direction swap | — | Pending b011 hardware regression |
 | ICM-20689 detection and XYZ | ESP32-C3 | PASS |
 | Automatic rotation | ESP32-C3 + ICM-20689 | PASS |
 | Custom I²C on single-controller ESP32 | ESP32-C3 | PASS |

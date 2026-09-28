@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.1.0-dev b011
+
+Rotation-direction inversion build.
+
+- Added `Invert Rotation` directly below `Sensor Mounting` in the usermod UI.
+- The option mirrors only the automatic quarter-turn component; `Setup Rotation` remains the base installation reference.
+- 0° and 180° are unchanged; 90° and 270° are swapped.
+- Added persistent `invert-rotation` configuration with a default of `false`, preserving existing configurations.
+- Added inversion state to WLED Info orientation diagnostics.
+- Added documentation and a dedicated hardware regression test for opposite-face sensor mounting.
+- Sensor drivers, I²C modes, stabilization logic and final-raster rotation code are otherwise unchanged from b010.
+
 ## 0.1.0-dev b010
 
 Consolidation build after hardware qualification of Shared I²C on ESP32-C3.

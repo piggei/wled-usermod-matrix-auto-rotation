@@ -1,4 +1,4 @@
-# v0.1.0-dev-b010 validation plan
+# v0.1.0-dev-b011 validation plan
 
 This plan covers current behavior only. Historical development-build migrations are regression-tested in code/config handling but are intentionally omitted from the user-facing test procedure.
 
@@ -7,6 +7,7 @@ This plan covers current behavior only. Historical development-build migrations 
 Verify:
 
 - normal field labels end with `:`;
+- `Invert Rotation:` appears below `Sensor Mounting:`;
 - `I²C` is shown as a section heading;
 - modes are `Matrix Portal`, `Shared`, `Custom`;
 - SDA/SCL/Address appear only for `Custom`;
@@ -34,7 +35,21 @@ Expected:
 
 Also verify Setup Rotation at 90° composes with automatic rotation rather than replacing it.
 
-## 3. Detection stability
+
+## 3. Invert Rotation
+
+With `Setup Rotation = 0°`, `Sensor Mounting = 0°` and all orientations allowed:
+
+| Physical orientation | Normal auto | Invert Rotation auto |
+| --- | ---: | ---: |
+| 0° / +Y | 0° | 0° |
+| 90° CW / +X | 90° | 270° |
+| 180° / -Y | 180° | 180° |
+| 270° CW / -X | 270° | 90° |
+
+Verify that enabling/disabling `Invert Rotation` does not alter `Setup Rotation`; the effective rotation must remain `setup + auto (mod 360)`. Also verify persistence across Save + reboot.
+
+## 4. Detection stability
 
 Using qualified defaults (0.55 g / 0.12 g / 600 ms / 100 ms):
 
@@ -45,7 +60,7 @@ Using qualified defaults (0.55 g / 0.12 g / 600 ms / 100 ms):
 5. Return upright: detection resumes normally.
 6. Disable one or more orientations and verify disallowed candidates are ignored.
 
-## 4. ICM-20689 on ESP32-C3
+## 5. ICM-20689 on ESP32-C3
 
 Known-qualified device:
 
@@ -59,7 +74,7 @@ Expected WLED Info:
 - non-zero live X/Y/Z values;
 - automatic rotation follows the same four-orientation behavior as LIS3DH after any required `Sensor Mounting` offset.
 
-## 5. Shared I²C coexistence on ESP32-C3
+## 6. Shared I²C coexistence on ESP32-C3
 
 Connect both sensors to the same physical SDA/SCL pair:
 
@@ -76,7 +91,7 @@ Expected:
 - MAR does not change bus pins or clock;
 - a late-initialized shared bus is recovered by MAR's periodic sensor-init retry.
 
-## 6. Custom I²C
+## 7. Custom I²C
 
 On a board/pin pair not already owned by WLED:
 
@@ -88,7 +103,7 @@ On a board/pin pair not already owned by WLED:
 
 On single-controller ESP32 targets, document that Custom rebinds the sole controller; use Shared instead when another component already owns the bus.
 
-## 7. Rectangular matrix guard
+## 8. Rectangular matrix guard
 
 For a non-square matrix:
 
@@ -97,7 +112,7 @@ For a non-square matrix:
 - WLED Info must report the unsupported rotation condition;
 - no crop, resize or geometry mutation is allowed.
 
-## 8. Diagnostics and error paths
+## 9. Diagnostics and error paths
 
 Verify meaningful status for:
 
@@ -109,6 +124,6 @@ Verify meaningful status for:
 
 A failure before `sensor.begin()` must never be displayed as sensor `OK`.
 
-## 9. Pending hardware qualification
+## 10. Pending hardware qualification
 
 A confirmed MPU-6050 device still requires a dedicated hardware pass. Expected IDs are `0x68`/`0x69`; repeat sections 3, 4 and 6 when available.
