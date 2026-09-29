@@ -1,4 +1,4 @@
-# v0.1.0-dev-b011 validation plan
+# v0.1.0-dev-b012 validation plan
 
 This plan covers current behavior only. Historical development-build migrations are regression-tested in code/config handling but are intentionally omitted from the user-facing test procedure.
 
@@ -127,3 +127,15 @@ A failure before `sensor.begin()` must never be displayed as sensor `OK`.
 ## 10. Pending hardware qualification
 
 A confirmed MPU-6050 device still requires a dedicated hardware pass. Expected IDs are `0x68`/`0x69`; repeat sections 3, 4 and 6 when available.
+
+
+## Runtime disconnect / reconnect
+
+1. Start with the sensor detected and confirm auto rotation works.
+2. Disconnect SDA or sensor power while WLED is running.
+3. Confirm MAR keeps the last effective rotation and reports `sensor disconnected` after three failed reads.
+4. Confirm `MAR health` increments `errors` and `disconnects`.
+5. Reconnect the sensor.
+6. Wait up to 60 seconds without rebooting.
+7. Confirm MAR returns to `sensor ready`, increments `reconnects`, and resumes orientation updates.
+8. Repeat on Shared I²C with another sensor (for example PAJ7620) active; the other device must remain operational.

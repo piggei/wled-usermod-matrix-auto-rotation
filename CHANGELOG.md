@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.1.0-dev-b012
+
+- Added runtime sensor disconnect detection after 3 consecutive failed reads.
+- Preserves the last valid matrix rotation while the sensor is offline.
+- Retries sensor initialization every 60 seconds after disconnect or absence.
+- Shared I²C retains a short 1-second retry window during the first 10 seconds of boot to tolerate usermod initialization order.
+- Added automatic recovery without reboot when the sensor returns.
+- Added runtime health counters: successful reads, read errors, consecutive errors, disconnects, reconnects, and last-good sample age.
+- Expanded orientation diagnostics to show raw orientation, sensor mounting, inversion, auto rotation, setup rotation, and effective rotation.
+- Updated the GUI screenshot to the current interface including Invert Rotation.
+
+
 ## 0.1.0-dev b011
 
 Rotation-direction inversion build.

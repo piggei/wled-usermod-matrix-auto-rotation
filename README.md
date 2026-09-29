@@ -1,6 +1,6 @@
 # WLED Matrix Auto Rotation
 
-**Version:** `0.1.0-dev-b011`  
+**Version:** `0.1.0-dev-b012`  
 **Status:** development baseline; LIS3DH, ICM-20689 and Shared I²C hardware-validated
 
 A standalone WLED usermod that automatically rotates the **final 2D matrix raster** according to an accelerometer, without changing effect or segment state.
@@ -147,6 +147,12 @@ pio run -e matrix_auto_rotation_test -t upload
 
 See [`docs/PLATFORMIO.md`](docs/PLATFORMIO.md) and `platformio_override.ini.sample`.
 
+## Runtime sensor recovery
+
+MAR continuously monitors successful accelerometer reads. Three consecutive read failures mark the sensor offline. The last valid rotation remains applied, so a temporary sensor/cable failure never rotates the display unexpectedly.
+
+While offline, MAR retries sensor initialization every 60 seconds and resumes automatically when the device becomes available again. Shared I²C has a short fast-retry window during boot only, to tolerate WLED/usermod initialization order.
+
 ## WLED Info diagnostics
 
 The usermod reports:
@@ -155,8 +161,9 @@ The usermod reports:
 - I²C mode;
 - detected sensor, address and device ID;
 - live X/Y/Z acceleration;
-- stable axis, automatic rotation, setup rotation, inversion state and effective rotation;
-- matrix geometry and read-error diagnostics.
+- complete orientation pipeline: stable axis, raw rotation, sensor mounting, inversion, automatic rotation, setup rotation and effective rotation;
+- runtime health counters: successful reads, read errors, consecutive errors, disconnects, reconnects and last-good sample age;
+- matrix geometry and unsupported-rotation diagnostics.
 
 These fields are intended to make sensor wiring and orientation qualification possible without adding debug code.
 
@@ -167,11 +174,12 @@ These fields are intended to make sensor wiring and orientation qualification po
 | LIS3DH detection and XYZ | Matrix Portal S3 | PASS |
 | Automatic 0/90/180/270 rotation | Matrix Portal S3 + LIS3DH | PASS |
 | Setup Rotation composition | Matrix Portal S3 + LIS3DH | PASS |
-| Invert Rotation direction swap | — | Pending b011 hardware regression |
+| Invert Rotation direction swap | ESP32-C3 + ICM-20689 | PASS |
 | ICM-20689 detection and XYZ | ESP32-C3 | PASS |
 | Automatic rotation | ESP32-C3 + ICM-20689 | PASS |
 | Custom I²C on single-controller ESP32 | ESP32-C3 | PASS |
 | Shared I²C coexistence | ESP32-C3 + PAJ7620 + ICM-20689 | PASS |
+| Runtime disconnect/reconnect recovery | — | Pending b012 hardware regression |
 | MPU-6050-specific hardware | — | Pending |
 
 ## Known limitations
@@ -188,3 +196,4 @@ The orientation classifier and Matrix Portal axis convention are derived from th
 ## License
 
 MIT. See [`LICENSE`](LICENSE).
+

@@ -7,14 +7,14 @@
 #include "matrix_auto_rotation_sensor.h"
 
 // WLED Matrix Auto Rotation
-// v0.1.0-dev build 11
+// v0.1.0-dev build 12
 //
 // Design rule: the usermod never modifies effect/segment state. Rotation is
 // applied in handleOverlayDraw(), after WLED has composited the final logical
 // raster and immediately before WLED applies its own logical->physical ledmap.
 
 namespace {
-constexpr char MAR_VERSION[] = "0.1.0-dev-b011";
+constexpr char MAR_VERSION[] = "0.1.0-dev-b012";
 constexpr uint8_t I2C_MODE_MATRIXPORTAL = 0;
 constexpr uint8_t I2C_MODE_CUSTOM = 1;
 constexpr uint8_t I2C_MODE_SHARED = 4;
@@ -28,6 +28,10 @@ constexpr int8_t DIR_POS_X = 0;
 constexpr int8_t DIR_NEG_X = 1;
 constexpr int8_t DIR_POS_Y = 2;
 constexpr int8_t DIR_NEG_Y = 3;
+constexpr uint8_t SENSOR_READ_FAILURE_LIMIT = 3;
+constexpr uint32_t SENSOR_RECONNECT_INTERVAL_MS = 60000u;
+constexpr uint32_t SHARED_BOOT_RETRY_INTERVAL_MS = 1000u;
+constexpr uint32_t SHARED_BOOT_RETRY_WINDOW_MS = 10000u;
 
 #if defined(ARDUINO_ARCH_ESP32) && defined(SOC_I2C_NUM) && (SOC_I2C_NUM > 1)
 TwoWire marCustomWire(1);
@@ -77,7 +81,15 @@ private:
   MARAccelSample _lastSample;
   uint32_t _lastSampleAt = 0;
   uint32_t _readErrors = 0;
+  uint32_t _successfulReads = 0;
+  uint32_t _consecutiveReadErrors = 0;
+  uint32_t _disconnects = 0;
+  uint32_t _reconnects = 0;
+  uint32_t _lastGoodSampleAt = 0;
   uint32_t _lastSensorInitAttemptAt = 0;
+  uint32_t _runtimeStartedAt = 0;
+  bool _sensorEverReady = false;
+  bool _waitingForReconnect = false;
 
   int8_t _candidateDirection = DIR_UNKNOWN;
   int8_t _stableDirection = DIR_UNKNOWN;
@@ -235,8 +247,9 @@ private:
     _stableAutoRotation = ORIENT_UNKNOWN;
     _candidateSince = 0;
     _lastSampleAt = 0;
-    _readErrors = 0;
+    _consecutiveReadErrors = 0;
     _lastSensorInitAttemptAt = 0;
+    _lastGoodSampleAt = 0;
     _lastSample = MARAccelSample{};
   }
 
@@ -263,8 +276,14 @@ private:
     _sensorReady = _sensor.begin(*wire, static_cast<MARSensorType>(_sensorType), effectiveAddress);
 
     if (_sensorReady) {
+      const bool recovered = _waitingForReconnect;
+      if (recovered) _reconnects++;
+      _sensorEverReady = true;
+      _waitingForReconnect = false;
+      _consecutiveReadErrors = 0;
       _status = "sensor ready";
-      DEBUG_PRINTF_P(PSTR("[MatrixAutoRotation] sensor=%s address=0x%02X init=OK\n"), _sensor.name(), _sensor.address());
+      DEBUG_PRINTF_P(PSTR("[MatrixAutoRotation] sensor=%s address=0x%02X init=OK%s\n"),
+        _sensor.name(), _sensor.address(), recovered ? " reconnect" : "");
     } else {
       _status = _sensor.initErrorText();
       DEBUG_PRINTF_P(PSTR("[MatrixAutoRotation] sensor=%s init=FAILED (%s, WHO_AM_I=0x%02X)\n"),
@@ -278,6 +297,8 @@ private:
     resetOrientationState();
     _sensorReady = false;
     _rotationUnsupported = false;
+    _runtimeStartedAt = millis();
+    _waitingForReconnect = false;
     _status = _enabled ? "ready" : "disabled";
 
     if (!_enabled) {
@@ -357,8 +378,23 @@ private:
     MARAccelSample sample;
     if (!_sensor.read(sample)) {
       _readErrors++;
+      _consecutiveReadErrors++;
+      if (_consecutiveReadErrors >= SENSOR_READ_FAILURE_LIMIT) {
+        _sensorReady = false;
+        _waitingForReconnect = true;
+        _disconnects++;
+        _lastSensorInitAttemptAt = now;
+        _status = "sensor disconnected";
+        _candidateDirection = DIR_UNKNOWN;
+        _candidateAutoRotation = ORIENT_UNKNOWN;
+        _candidateSince = now;
+        DEBUG_PRINTLN(F("[MatrixAutoRotation] sensor disconnected; retry in 60s"));
+      }
       return;
     }
+    _consecutiveReadErrors = 0;
+    _successfulReads++;
+    _lastGoodSampleAt = now;
     _lastSample = sample;
 
     const int8_t nextDirection = classifyGravity(sample);
@@ -427,10 +463,15 @@ public:
     if (!_enabled || !_autoRotationEnabled) return;
     const uint32_t now = millis();
     if (!_sensorReady) {
-      // In Shared mode WLED or another usermod may initialize the global Wire bus after this usermod
-      // setup() runs. Retry without ever reconfiguring or taking ownership of
-      // the bus. This also recovers if the owning usermod restarts its sensor.
-      if (_i2cMode == I2C_MODE_SHARED && uint32_t(now - _lastSensorInitAttemptAt) >= 1000u) initializeSensor();
+      // A sensor that was previously operational is retried once per minute.
+      // Before the first successful detection, Shared mode gets a short fast-retry
+      // window because WLED/user-mod initialization order is not guaranteed.
+      uint32_t retryInterval = SENSOR_RECONNECT_INTERVAL_MS;
+      if (!_sensorEverReady && _i2cMode == I2C_MODE_SHARED &&
+          uint32_t(now - _runtimeStartedAt) <= SHARED_BOOT_RETRY_WINDOW_MS) {
+        retryInterval = SHARED_BOOT_RETRY_INTERVAL_MS;
+      }
+      if (uint32_t(now - _lastSensorInitAttemptAt) >= retryInterval) initializeSensor();
       return;
     }
     pollSensor(now);
@@ -523,12 +564,28 @@ public:
     JsonArray accel = user.createNestedArray(F("MAR acceleration"));
     accel.add(accelText);
 
-    char orientText[96];
+    char orientText[144];
+    const int rawDeg = _stableDirection == DIR_UNKNOWN ? -1 : int(degreesFromQuarterTurns(rotationForDirection(_stableDirection)));
     const int stableAutoDeg = _stableAutoRotation == ORIENT_UNKNOWN ? -1 : int(degreesFromQuarterTurns(uint8_t(_stableAutoRotation)));
-    snprintf(orientText, sizeof(orientText), "axis %s | auto %d | setup %u | invert %s | effective %u",
-      directionName(_stableDirection), stableAutoDeg, _setupRotationDeg, _invertRotation ? "on" : "off", degreesFromQuarterTurns(_effectiveRotation));
+    snprintf(orientText, sizeof(orientText), "axis %s | raw %d | mounting %u | invert %s | auto %d | setup %u | effective %u",
+      directionName(_stableDirection), rawDeg, _sensorMountingDeg, _invertRotation ? "on" : "off", stableAutoDeg, _setupRotationDeg, degreesFromQuarterTurns(_effectiveRotation));
     JsonArray orient = user.createNestedArray(F("MAR orientation"));
     orient.add(orientText);
+
+    char healthText[192];
+    const uint32_t nowInfo = millis();
+    if (_lastGoodSampleAt) {
+      const uint32_t sampleAge = uint32_t(nowInfo - _lastGoodSampleAt);
+      snprintf(healthText, sizeof(healthText), "reads %lu | errors %lu | consecutive %lu | disconnects %lu | reconnects %lu | last-good %lu ms",
+        (unsigned long)_successfulReads, (unsigned long)_readErrors, (unsigned long)_consecutiveReadErrors,
+        (unsigned long)_disconnects, (unsigned long)_reconnects, (unsigned long)sampleAge);
+    } else {
+      snprintf(healthText, sizeof(healthText), "reads %lu | errors %lu | consecutive %lu | disconnects %lu | reconnects %lu | last-good never",
+        (unsigned long)_successfulReads, (unsigned long)_readErrors, (unsigned long)_consecutiveReadErrors,
+        (unsigned long)_disconnects, (unsigned long)_reconnects);
+    }
+    JsonArray health = user.createNestedArray(F("MAR health"));
+    health.add(healthText);
 
     char matrixText[64];
     snprintf(matrixText, sizeof(matrixText), "%ux%u%s", Segment::maxWidth, Segment::maxHeight,
@@ -536,10 +593,6 @@ public:
     JsonArray matrix = user.createNestedArray(F("MAR matrix"));
     matrix.add(matrixText);
 
-    if (_readErrors) {
-      JsonArray errors = user.createNestedArray(F("MAR I²C read errors"));
-      errors.add(_readErrors);
-    }
   }
 
   void addToConfig(JsonObject &root) override {
