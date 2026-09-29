@@ -1,4 +1,6 @@
-# v0.1.0-dev-b012 validation plan
+# v0.1.0-dev-b015 validation plan
+
+Current status: b014 Auto Calibrate passed on the current ESP32-C3 + ICM-20689 inverted-face installation. b015 changes only the calibration-block layout.
 
 This plan covers current behavior only. Historical development-build migrations are regression-tested in code/config handling but are intentionally omitted from the user-facing test procedure.
 
@@ -7,14 +9,34 @@ This plan covers current behavior only. Historical development-build migrations 
 Verify:
 
 - normal field labels end with `:`;
-- `Invert Rotation:` appears below `Sensor Mounting:`;
+- `Sensor Mounting:` and `Invert Rotation:` occupy the left column of the calibration block;
+- the button is disabled until the configured sensor is detected and the current orientation is stable;
+- changing Sensor or I²C hardware fields without saving disables the button;
+- `Auto Calibrate` is vertically centered in the right column across those two rows;
+- the upright/90° clockwise instruction appears in orange below the complete calibration block;
 - `I²C` is shown as a section heading;
 - modes are `Matrix Portal`, `Shared`, `Custom`;
 - SDA/SCL/Address appear only for `Custom`;
 - `Advanced:` reveals Threshold G, Hysteresis G, Stable Ms and Poll Ms;
 - `Allow Rotation` displays 0 / 90 / 180 / 270 and prevents an empty allow mask.
 
-## 2. Matrix Portal S3 + LIS3DH regression
+## 2. Auto Calibrate
+
+With the sensor already detected and the display held upright:
+
+1. Wait until `Auto Calibrate` becomes enabled.
+2. Press it; no settings should change yet.
+3. Rotate the display exactly 90° clockwise and hold it steady.
+4. Verify the helper updates `Sensor Mounting` and `Invert Rotation` so the initial upright pose resolves to automatic rotation 0°; `Setup Rotation` must remain unchanged.
+5. Verify the success message asks the user to press the normal WLED Save button.
+6. Repeat with the sensor mounted on the opposite face; `Invert Rotation` should be selected automatically when required.
+7. Start again and do not rotate: after 15 seconds calibration must time out without changing `Sensor Mounting` or `Invert Rotation`.
+8. Disconnect the sensor during calibration: the operation must abort without changing settings.
+9. Change Sensor, I²C mode, SDA/SCL or address without saving: the button must remain disabled until the active hardware configuration matches the page again.
+
+Calibration is intentionally separate from future Sensor Auto Detect: it operates only on an already configured and detected sensor.
+
+## 3. Matrix Portal S3 + LIS3DH regression
 
 Configuration:
 
@@ -36,7 +58,7 @@ Expected:
 Also verify Setup Rotation at 90° composes with automatic rotation rather than replacing it.
 
 
-## 3. Invert Rotation
+## 4. Invert Rotation
 
 With `Setup Rotation = 0°`, `Sensor Mounting = 0°` and all orientations allowed:
 
@@ -49,7 +71,7 @@ With `Setup Rotation = 0°`, `Sensor Mounting = 0°` and all orientations allowe
 
 Verify that enabling/disabling `Invert Rotation` does not alter `Setup Rotation`; the effective rotation must remain `setup + auto (mod 360)`. Also verify persistence across Save + reboot.
 
-## 4. Detection stability
+## 5. Detection stability
 
 Using qualified defaults (0.55 g / 0.12 g / 600 ms / 100 ms):
 
@@ -60,7 +82,7 @@ Using qualified defaults (0.55 g / 0.12 g / 600 ms / 100 ms):
 5. Return upright: detection resumes normally.
 6. Disable one or more orientations and verify disallowed candidates are ignored.
 
-## 5. ICM-20689 on ESP32-C3
+## 6. ICM-20689 on ESP32-C3
 
 Known-qualified device:
 
@@ -74,7 +96,7 @@ Expected WLED Info:
 - non-zero live X/Y/Z values;
 - automatic rotation follows the same four-orientation behavior as LIS3DH after any required `Sensor Mounting` offset.
 
-## 6. Shared I²C coexistence on ESP32-C3
+## 7. Shared I²C coexistence on ESP32-C3
 
 Connect both sensors to the same physical SDA/SCL pair:
 
@@ -91,7 +113,7 @@ Expected:
 - MAR does not change bus pins or clock;
 - a late-initialized shared bus is recovered by MAR's periodic sensor-init retry.
 
-## 7. Custom I²C
+## 8. Custom I²C
 
 On a board/pin pair not already owned by WLED:
 
@@ -103,7 +125,7 @@ On a board/pin pair not already owned by WLED:
 
 On single-controller ESP32 targets, document that Custom rebinds the sole controller; use Shared instead when another component already owns the bus.
 
-## 8. Rectangular matrix guard
+## 9. Rectangular matrix guard
 
 For a non-square matrix:
 
@@ -112,7 +134,7 @@ For a non-square matrix:
 - WLED Info must report the unsupported rotation condition;
 - no crop, resize or geometry mutation is allowed.
 
-## 9. Diagnostics and error paths
+## 10. Diagnostics and error paths
 
 Verify meaningful status for:
 
@@ -124,7 +146,7 @@ Verify meaningful status for:
 
 A failure before `sensor.begin()` must never be displayed as sensor `OK`.
 
-## 10. Pending hardware qualification
+## 11. Pending hardware qualification
 
 A confirmed MPU-6050 device still requires a dedicated hardware pass. Expected IDs are `0x68`/`0x69`; repeat sections 3, 4 and 6 when available.
 
@@ -139,3 +161,11 @@ A confirmed MPU-6050 device still requires a dedicated hardware pass. Expected I
 6. Wait up to 60 seconds without rebooting.
 7. Confirm MAR returns to `sensor ready`, increments `reconnects`, and resumes orientation updates.
 8. Repeat on Shared I²C with another sensor (for example PAJ7620) active; the other device must remain operational.
+
+## b015 calibration layout smoke test
+
+- Confirm `Sensor Mounting` and `Invert Rotation` appear in the left column.
+- Confirm `Auto Calibrate` is centered vertically in the right column across those two rows.
+- Confirm the orange instructions appear below the complete calibration block.
+- Confirm narrow/mobile layout stacks cleanly without horizontal overflow.
+- Confirm button gating and calibration behavior are unchanged from b014.

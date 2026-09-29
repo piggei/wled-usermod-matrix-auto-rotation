@@ -2,7 +2,9 @@
 
 ## Before 0.1.0 final
 
-- Hardware-regression-test b012 runtime disconnect/reconnect recovery on LIS3DH and ICM-20689.
+- Hardware-regression-test runtime disconnect/reconnect recovery on LIS3DH and ICM-20689.
+- Complete the remaining `Auto Calibrate` regression on a normal-face sensor installation; the current inverted-face ESP32-C3 + ICM-20689 installation has passed and `Setup Rotation` remained untouched.
+- Hardware-smoke-test the b015 two-column calibration layout on desktop and a narrow/mobile viewport.
 - Verify Shared I²C recovery while PAJ7620 remains active on the same bus.
 - Re-run the 0/90/180/270, Setup Rotation and Invert Rotation regression matrix.
 - Static audit and documentation consistency pass before the first release candidate.
@@ -10,8 +12,6 @@
 ## 0.2.0 candidates
 
 - **Sensor Auto Detect** after the I²C bus/board/pins have already been configured. Keep bus selection and sensor detection as separate concepts.
-- **Setup Rotation helper** available only when a sensor has already been detected and a valid/stable orientation exists. A static detect can determine the relative zero only.
-- **Guided full calibration** if desired: first capture the zero position, then ask the user to rotate the matrix by 90 degrees in a known direction so the software can also determine rotation sense / Invert Rotation.
 - Optional explicit sensor address selection in Shared mode for installations containing multiple compatible devices.
 - Add new accelerometer backends as hardware becomes available, without changing the common orientation engine.
 

@@ -1,6 +1,6 @@
 # WLED Matrix Auto Rotation
 
-**Version:** `0.1.0-dev-b012`  
+**Version:** `0.1.0-dev-b015`  
 **Status:** development baseline; LIS3DH, ICM-20689 and Shared I²C hardware-validated
 
 A standalone WLED usermod that automatically rotates the **final 2D matrix raster** according to an accelerometer, without changing effect or segment state.
@@ -9,6 +9,7 @@ A standalone WLED usermod that automatically rotates the **final 2D matrix raste
 
 - 0° / 90° / 180° / 270° automatic matrix rotation.
 - Configurable base (`Setup Rotation`) and sensor mounting rotation.
+- Guided `Auto Calibrate` helper that learns sensor mounting orientation and rotation direction from a 90° clockwise turn, without changing `Setup Rotation`.
 - Optional `Invert Rotation` for sensor boards mounted on the opposite face of the enclosure.
 - Per-orientation allow mask.
 - Threshold, hysteresis, stable time and polling controls under `Advanced`.
@@ -112,9 +113,13 @@ Open **Config → Usermods → MatrixAutoRotation**.
 
 ![Matrix Auto Rotation usermod settings](docs/images/configuration.png)
 
+`Auto Calibrate` appears beside `Sensor Mounting:`. It is enabled only when the already-configured sensor is detected and the current upright orientation is stable. Place the display upright, press the button, then rotate the display **90° clockwise** and hold it steady. MAR determines the required `Sensor Mounting` and whether `Invert Rotation` must be enabled, then updates those two controls. `Setup Rotation` is deliberately left untouched because it is an independent visual raster offset. The normal WLED **Save** button still commits the changes.
+
+If `Sensor`, I²C mode, SDA/SCL or address are changed but not yet saved, `Auto Calibrate` is disabled because the running firmware is still using the previous hardware configuration. Calibration times out after 15 seconds and never changes settings on failure.
+
 `Invert Rotation:` appears directly below `Sensor Mounting:`. The four detection/timing parameters are hidden until `Advanced:` is enabled. `Allow Rotation` controls which quarter-turn orientations may be accepted; at least one orientation is always retained.
 
-The screenshot illustrates the configuration layout. Available I²C modes in the current build are `Matrix Portal`, `Shared` and `Custom`.
+The screenshot shows the hardware-tested b014 calibration controls. b015 only reorganizes the same controls into a two-column calibration block; the screenshot will be refreshed after the b015 UI pass. Available I²C modes are `Matrix Portal`, `Shared` and `Custom`.
 
 ## Rectangular matrices
 
@@ -179,7 +184,8 @@ These fields are intended to make sensor wiring and orientation qualification po
 | Automatic rotation | ESP32-C3 + ICM-20689 | PASS |
 | Custom I²C on single-controller ESP32 | ESP32-C3 | PASS |
 | Shared I²C coexistence | ESP32-C3 + PAJ7620 + ICM-20689 | PASS |
-| Runtime disconnect/reconnect recovery | — | Pending b012 hardware regression |
+| Runtime disconnect/reconnect recovery | — | Pending hardware regression |
+| Auto Calibrate mounting + direction | ESP32-C3 + ICM-20689, current inverted-face installation | PASS |
 | MPU-6050-specific hardware | — | Pending |
 
 ## Known limitations

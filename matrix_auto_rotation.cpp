@@ -7,14 +7,14 @@
 #include "matrix_auto_rotation_sensor.h"
 
 // WLED Matrix Auto Rotation
-// v0.1.0-dev build 12
+// v0.1.0-dev build 13
 //
 // Design rule: the usermod never modifies effect/segment state. Rotation is
 // applied in handleOverlayDraw(), after WLED has composited the final logical
 // raster and immediately before WLED applies its own logical->physical ledmap.
 
 namespace {
-constexpr char MAR_VERSION[] = "0.1.0-dev-b012";
+constexpr char MAR_VERSION[] = "0.1.0-dev-b015";
 constexpr uint8_t I2C_MODE_MATRIXPORTAL = 0;
 constexpr uint8_t I2C_MODE_CUSTOM = 1;
 constexpr uint8_t I2C_MODE_SHARED = 4;
@@ -731,7 +731,20 @@ public:
       "T(N+'enabled','Enabled:');T(N+'setup-rotation','Setup Rotation:');T(N+'auto-rotation','Auto Rotation:');T(N+'sensor','Sensor:');T(N+'sensor-mounting','Sensor Mounting:');T(N+'invert-rotation','Invert Rotation:');"
       "T(N+'i2c:mode','Mode:');T(N+'i2c:SDA-pin','SDA Pin:');T(N+'i2c:SCL-pin','SCL Pin:');T(N+'i2c:address','Address:');"
       "T(N+'advanced','Advanced:');T(N+'advanced-settings:threshold-g','Threshold G:');T(N+'advanced-settings:hysteresis-g','Hysteresis G:');T(N+'advanced-settings:stable-ms','Stable Ms:');T(N+'advanced-settings:poll-ms','Poll Ms:');"
-      "let sr=W(N+'setup-rotation');if(sr)sr.style.marginBottom='12px';"
+      "let sm=W(N+'sensor-mounting'),ir=W(N+'invert-rotation'),calBtn=null,calHelp=null,calRun=false,calPending=false,calStable=false,calHwDirty=false,calBgRaw=-1,calBgSince=0;"
+      "if(sm&&ir){let p=sm.parentNode,g=cE('div'),left=cE('div'),act=cE('div'),sty=cE('style');g.className='mar-cal-grid';act.className='mar-cal-action';g.style.cssText='display:grid;grid-template-columns:minmax(0,1fr) 150px;align-items:center;column-gap:12px;margin:0 auto 4px;max-width:430px';left.style.cssText='min-width:0';act.style.cssText='display:flex;align-items:center;justify-content:center;height:100%';sm.style.cssText+=';margin:0 0 6px';ir.style.cssText+=';margin:0';p.insertBefore(g,sm);left.appendChild(sm);left.appendChild(ir);g.appendChild(left);g.appendChild(act);calBtn=cE('button');calBtn.type='button';calBtn.textContent='Auto Calibrate';calBtn.disabled=true;calBtn.style.cssText='width:auto;padding:5px 10px;margin:0;white-space:nowrap';act.appendChild(calBtn);calHelp=cE('div');calHelp.textContent='Place the display upright, press Auto Calibrate, then rotate it 90° clockwise and hold it steady.';calHelp.style.cssText='font-size:.85em;color:#fa0;text-align:center;margin:6px 8px 12px';g.insertAdjacentElement('afterend',calHelp);sty.textContent='@media(max-width:480px){.mar-cal-grid{grid-template-columns:1fr!important;row-gap:8px}.mar-cal-action{min-height:36px}}';sec.appendChild(sty);}" 
+      "const UI=(j,k)=>j&&j.u&&j.u[k]&&j.u[k][0];"
+      "const V=r=>r==0||r==90||r==180||r==270;"
+      "const GV=(n,f)=>{let e=E(n),v=e?parseFloat(e.value):NaN;return Number.isFinite(v)?v:f;};"
+      "const RS=async()=>{try{let j=await fetch('/json/info',{cache:'no-store'}).then(r=>r.json()),sn=String(UI(j,'MAR sensor')||''),a=String(UI(j,'MAR acceleration')||''),m=a.match(/X\\s+(-?\\d+(?:\\.\\d+)?)\\s+Y\\s+(-?\\d+(?:\\.\\d+)?)/);if(!sn.includes('@ 0x')||!m)return{ready:false,raw:-1};let x=+m[1],y=+m[2],ax=Math.abs(x),ay=Math.abs(y),th=GV(N+'advanced-settings:threshold-g',.55),hy=GV(N+'advanced-settings:hysteresis-g',.12);if(Math.max(ax,ay)<th||Math.abs(ax-ay)<hy)return{ready:true,raw:-1};return{ready:true,raw:ax>=ay?(x>=0?90:270):(y>=0?0:180)};}catch(e){return{ready:false,raw:-1};}};"
+      "const SM=()=>Math.max(0,GV(N+'advanced-settings:stable-ms',600));"
+      "const HS=()=>[N+'sensor',N+'i2c:mode',N+'i2c:SDA-pin',N+'i2c:SCL-pin',N+'i2c:address'].map(n=>{let e=E(n);return e?(e.type=='checkbox'?(e.checked?1:0):e.value):'';}).join('|');"
+      "let hsig=HS();"
+      "const UB=()=>{if(calBtn)calBtn.disabled=calRun||calPending||calHwDirty||!calStable;};"
+      "const BG=async()=>{if(calRun||calPending)return;let s=await RS(),now=Date.now();if(s.ready&&V(s.raw)){if(s.raw!=calBgRaw){calBgRaw=s.raw;calBgSince=now;}calStable=(now-calBgSince)>=SM();}else{calBgRaw=-1;calBgSince=0;calStable=false;}UB();};"
+      "[N+'sensor',N+'i2c:mode',N+'i2c:SDA-pin',N+'i2c:SCL-pin',N+'i2c:address'].forEach(n=>{let e=E(n);if(e)e.addEventListener('change',()=>{calHwDirty=HS()!=hsig;calStable=false;calBgRaw=-1;calBgSince=0;UB();});});"
+      "if(calBtn)calBtn.addEventListener('click',async()=>{let first=await RS();if(calHwDirty||!first.ready||!V(first.raw)){calStable=false;UB();return;}calRun=true;UB();let start=first.raw,cand=-1,since=0,t0=Date.now();calHelp.textContent='Now rotate the display 90° clockwise and hold it steady…';let finish=(ok,msg)=>{calRun=false;if(ok)calPending=true;calHelp.textContent=msg;UB();};let timer=setInterval(async()=>{if(Date.now()-t0>15000){clearInterval(timer);finish(false,'Calibration timed out. Keep the display upright and try again.');return;}let s=await RS();if(!s.ready){clearInterval(timer);finish(false,'Calibration stopped: sensor is no longer available.');return;}let delta=V(s.raw)?((s.raw-start+360)%360):-1;if(delta!=90&&delta!=270){cand=-1;since=0;return;}if(s.raw!=cand){cand=s.raw;since=Date.now();return;}if(Date.now()-since<SM())return;clearInterval(timer);let inv=delta==270,me=E(N+'sensor-mounting'),ie=E(N+'invert-rotation');if(me)me.value=String(start);if(ie)ie.checked=inv;finish(true,'Calibration complete: Sensor Mounting '+start+'°, Invert Rotation '+(inv?'enabled':'disabled')+'. Press Save to apply.');},500);});"
+      "setInterval(BG,1000);setTimeout(BG,150);"
       "let heads=[...sec.querySelectorAll('p>u')];"
       "const H=t=>heads.find(u=>u.textContent.trim().toLowerCase()==t.toLowerCase());"
       "let ih=H('I2c');if(ih){ih.innerHTML='I<sup>2</sup>C';ih.style.cssText='font-weight:700;font-size:1.15em;text-decoration:none';ih.parentElement.style.margin='14px 0 8px';}"

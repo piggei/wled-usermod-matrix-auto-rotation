@@ -1,5 +1,34 @@
 # Changelog
 
+## 0.1.0-dev-b015
+
+- Reworked only the `Auto Calibrate` presentation; calibration and runtime behavior are unchanged from b014.
+- Grouped `Sensor Mounting` and `Invert Rotation` in the left column of a dedicated calibration block.
+- Moved the `Auto Calibrate` button to a right-hand column, vertically centered across those two sensor-installation controls.
+- Kept the WLED-style orange calibration instructions below the full two-column block.
+- Added a narrow-screen fallback that stacks the button below the two sensor-installation rows.
+- Recorded the b014 Auto Calibrate hardware pass on the current ESP32-C3 + ICM-20689 installation; runtime disconnect/reconnect qualification remains pending.
+
+## 0.1.0-dev-b014
+
+- Corrected the conceptual target of `Auto Calibrate`: it now calibrates `Sensor Mounting` and `Invert Rotation`, not `Setup Rotation`.
+- Moved `Auto Calibrate` beside `Sensor Mounting` in the usermod UI.
+- `Setup Rotation` is now explicitly untouched by calibration because it is an independent final-raster visual offset.
+- The first stable upright pose becomes the calibrated `Sensor Mounting`; the following stable 90° clockwise turn determines `Invert Rotation`.
+- Changed the calibration helper note to WLED-style orange.
+- Kept the existing detected-sensor/stable-pose gating, unsaved-hardware-change protection, 15-second timeout, transactional failure behavior, and explicit Save requirement.
+
+## 0.1.0-dev-b013
+
+- Added guided `Auto Calibrate` beside `Setup Rotation`.
+- The control is enabled only when the configured sensor is detected and the current pose is stable.
+- Calibration captures the upright pose, asks for a 90° clockwise turn, and derives both `Setup Rotation` and `Invert Rotation`.
+- Calibration reads live runtime sensor data from WLED Info, so it does not require a new persistent calibration state or a custom HTTP endpoint.
+- Unsaved Sensor/I²C hardware changes disable calibration because the running firmware is still using the previous bus configuration.
+- A 15-second timeout or sensor loss aborts calibration transactionally without changing settings.
+- Successful calibration updates the UI only; the normal WLED Save action remains responsible for persistence.
+- Sensor Auto Detect remains deferred to 0.2.0.
+
 ## 0.1.0-dev-b012
 
 - Added runtime sensor disconnect detection after 3 consecutive failed reads.
