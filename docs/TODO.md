@@ -1,25 +1,25 @@
 # Roadmap / TODO
 
-## Before 0.1.0 final
+## 0.1.0 status
 
-- Hardware-regression-test runtime disconnect/reconnect recovery on LIS3DH and ICM-20689.
-- Complete the remaining `Auto Calibrate` regression on a normal-face sensor installation; the current inverted-face ESP32-C3 + ICM-20689 installation has passed and `Setup Rotation` remained untouched.
-- Smoke-test the responsive calibration layout on a narrow/mobile viewport.
-- Verify Shared I²C recovery while PAJ7620 remains active on the same bus.
-- Re-run the 0/90/180/270, Setup Rotation and Invert Rotation regression matrix.
-- Hardware-test the b016 rectangular-matrix requested/applied guard if a rectangular matrix is available.
-- Static audit and documentation consistency pass before the first release candidate.
+The available-hardware RC regression matrix passed and `0.1.0` was promoted to the first stable release without runtime code changes after RC1.
+
+## Device qualification still pending
+
+- Confirm the MPU-family backend on a known genuine MPU-6050 (`WHO_AM_I 0x68/0x69`).
+- Add and qualify the additional accelerometer board when hardware becomes available.
 
 ## 0.2.0 candidates
 
 - **Sensor Auto Detect** after the I²C bus/board/pins have already been configured. Keep bus selection and sensor detection as separate concepts.
 - Optional explicit sensor address selection in Shared mode for installations containing multiple compatible devices.
-- Add new accelerometer backends as hardware becomes available, without changing the common orientation engine.
+- Add new accelerometer backends without changing the common orientation engine.
+- Consider a dedicated WLED PinManager owner/claim path for Custom I²C if an upstream-compatible usermod pin-owner mechanism is available.
 
 ## Design constraints to preserve
 
-- Do not use payload/effect state to determine orientation.
 - Keep sensor drivers separate from the common orientation engine.
 - Rotate only the final logical 2D raster.
+- `Setup Rotation` remains a visual raster offset; sensor calibration must not repurpose it.
 - Do not add continuous pitch/roll, gyro integration, interpolation or other IMU complexity unless a concrete use case requires it.
-- Preserve b011 as the last hardware-qualified baseline before runtime-recovery changes.
+- Preserve Shared I²C as non-owning: it must not reinitialize, repin or retime WLED's bus.

@@ -1,5 +1,5 @@
 ; WLED Matrix Auto Rotation - PlatformIO integration sample
-; v0.1.0-dev-b016
+; v0.1.0
 ;
 ; This file is NOT a standalone firmware project. The usermod is a PlatformIO
 ; library loaded by a normal WLED checkout through custom_usermods.

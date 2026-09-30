@@ -1,8 +1,20 @@
-# v0.1.0-dev-b016 validation plan
+# v0.1.0 validation plan
 
-Current status: Auto Calibrate and the b015 two-column calibration layout passed on the current ESP32-C3 + ICM-20689 installation. b016 consolidates documentation, diagnostics and rectangular-matrix behavior.
+`0.1.0` is the first stable release, promoted from the hardware-qualified `0.1.0-rc.1` candidate after the available regression matrix passed without requiring runtime code changes.
 
-This plan covers current behavior only. Historical development-build migrations are regression-tested in code/config handling but are intentionally omitted from the user-facing test procedure.
+Hardware validated for the 0.1.0 release:
+
+- LIS3DH on Matrix Portal S3;
+- automatic 0° / 90° / 180° / 270° rotation;
+- Setup Rotation composition;
+- ICM-20689 on ESP32-C3;
+- Custom I²C on ESP32-C3;
+- Shared I²C coexistence with PAJ7620;
+- Invert Rotation;
+- Auto Calibrate on the current opposite-face sensor installation;
+- runtime disconnect/reconnect recovery without reboot.
+
+The checks below are the release-regression matrix.
 
 ## 1. Configuration UI
 
@@ -10,15 +22,16 @@ Verify:
 
 - normal field labels end with `:`;
 - `Sensor Mounting:` and `Invert Rotation:` occupy the left column of the calibration block;
-- the button is disabled until the configured sensor is detected and the current orientation is stable;
-- changing Sensor or I²C hardware fields without saving disables the button;
 - `Auto Calibrate` is vertically centered in the right column across those two rows;
 - the upright/90° clockwise instruction appears in orange below the complete calibration block;
+- the button is disabled until the configured sensor is detected and the current orientation is stable;
+- changing Sensor or I²C hardware fields without saving disables the button;
 - `I²C` is shown as a section heading;
 - modes are `Matrix Portal`, `Shared`, `Custom`;
 - SDA/SCL/Address appear only for `Custom`;
 - `Advanced:` reveals Threshold G, Hysteresis G, Stable Ms and Poll Ms;
-- `Allow Rotation` displays 0 / 90 / 180 / 270 and prevents an empty allow mask.
+- `Allow Rotation` displays 0 / 90 / 180 / 270 and prevents an empty allow mask;
+- narrow/mobile layout stacks without horizontal overflow.
 
 ## 2. Auto Calibrate
 
@@ -29,10 +42,9 @@ With the sensor already detected and the display held upright:
 3. Rotate the display exactly 90° clockwise and hold it steady.
 4. Verify the helper updates `Sensor Mounting` and `Invert Rotation` so the initial upright pose resolves to automatic rotation 0°; `Setup Rotation` must remain unchanged.
 5. Verify the success message asks the user to press the normal WLED Save button.
-6. Repeat with the sensor mounted on the opposite face; `Invert Rotation` should be selected automatically when required.
-7. Start again and do not rotate: after 15 seconds calibration must time out without changing `Sensor Mounting` or `Invert Rotation`.
-8. Disconnect the sensor during calibration: the operation must abort without changing settings.
-9. Change Sensor, I²C mode, SDA/SCL or address without saving: the button must remain disabled until the active hardware configuration matches the page again.
+6. Start again and do not rotate: after 15 seconds calibration must time out without changing settings.
+7. Disconnect the sensor during calibration: the operation must abort without changing settings.
+8. Change Sensor, I²C mode, SDA/SCL or address without saving: the button must remain disabled until the active hardware configuration matches the page again.
 
 Calibration is intentionally separate from future Sensor Auto Detect: it operates only on an already configured and detected sensor.
 
@@ -57,7 +69,6 @@ Expected:
 
 Also verify Setup Rotation at 90° composes with automatic rotation rather than replacing it.
 
-
 ## 4. Invert Rotation
 
 With `Setup Rotation = 0°`, `Sensor Mounting = 0°` and all orientations allowed:
@@ -69,7 +80,7 @@ With `Setup Rotation = 0°`, `Sensor Mounting = 0°` and all orientations allowe
 | 180° / -Y | 180° | 180° |
 | 270° CW / -X | 270° | 90° |
 
-Verify that enabling/disabling `Invert Rotation` does not alter `Setup Rotation`; the effective rotation must remain `setup + auto (mod 360)`. Also verify persistence across Save + reboot.
+Verify that enabling/disabling `Invert Rotation` does not alter `Setup Rotation`; the effective rotation remains `setup + auto (mod 360)`. Verify persistence across Save + reboot.
 
 ## 5. Detection stability
 
@@ -98,7 +109,7 @@ Expected WLED Info:
 
 ## 7. Shared I²C coexistence on ESP32-C3
 
-Connect both sensors to the same physical SDA/SCL pair:
+Connect both devices to the same physical SDA/SCL pair:
 
 - PAJ7620: `0x73`;
 - ICM-20689: `0x68`.
@@ -111,7 +122,7 @@ Expected:
 - PAJ7620 remains connected and gestures remain functional;
 - ICM-20689 remains detected and automatic rotation works;
 - MAR does not change bus pins or clock;
-- a late-initialized shared bus is recovered by MAR's periodic sensor-init retry.
+- a late-initialized shared bus is recovered by MAR's sensor-init retry.
 
 ## 8. Custom I²C
 
@@ -123,20 +134,37 @@ On a board/pin pair not already owned by WLED:
 - verify explicit supported address selection;
 - verify invalid/equal/conflicting pins are rejected without destabilizing WLED.
 
-On single-controller ESP32 targets, document that Custom rebinds the sole controller; use Shared instead when another component already owns the bus.
+On single-controller ESP32 targets, Custom rebinds the sole controller; use Shared instead when another component already owns the bus.
 
-## 9. Rectangular matrix guard
+## 9. Runtime disconnect/reconnect
+
+Hardware status for 0.1.0: **PASS**.
+
+Regression procedure:
+
+1. Start with the sensor detected and confirm auto rotation works.
+2. Disconnect SDA or sensor power while WLED is running.
+3. Confirm MAR keeps the last applied rotation and reports `sensor disconnected` after three failed reads.
+4. Confirm `MAR health` increments `errors` and `disconnects`.
+5. Reconnect the sensor.
+6. Wait up to 60 seconds without rebooting.
+7. Confirm MAR returns to `sensor ready`, increments `reconnects`, and resumes orientation updates.
+8. On Shared I²C, confirm the other device remains operational throughout.
+
+## 10. Rectangular matrix guard
 
 For a non-square matrix:
 
-- final 0° and 180° must rotate normally;
-- a composed final request of 90°/270° must apply 0° instead of attempting a crop, resize or geometry mutation;
-- `MAR orientation` must show different `requested` and `applied` values for a blocked quarter-turn;
-- `MAR matrix` must identify the geometry as rectangular, report `final 0/180 only`, and flag a blocked quarter-turn while it is requested;
-- returning to a supported request must clear the blocked state automatically;
-- square matrices must continue to report full 0/90/180/270 capability.
+- final 0° and 180° rotate normally;
+- a composed final request of 90°/270° applies 0° instead of attempting crop, resize or geometry mutation;
+- `MAR orientation` shows different `requested` and `applied` values for a blocked quarter-turn;
+- `MAR matrix` identifies the geometry as rectangular, reports `final 0/180 only`, and flags a blocked quarter-turn while requested;
+- returning to a supported request clears the blocked state automatically;
+- square matrices continue to report full 0/90/180/270 capability.
 
-## 10. Diagnostics and error paths
+This guard is statically verified for 0.1.0; a dedicated rectangular hardware regression remains desirable when suitable hardware is available.
+
+## 11. Diagnostics and error paths
 
 Verify meaningful status for:
 
@@ -144,40 +172,21 @@ Verify meaningful status for:
 - WHO_AM_I read failure/mismatch;
 - configuration write/read-back failure;
 - framebuffer allocation failure;
-- unsupported rectangular rotation.
+- blocked rectangular quarter-turn.
 
-Also verify the b016 diagnostic set:
+Verify the 0.1.0 diagnostic set:
 
 - `MAR runtime` reports enabled/auto/sensor-ready state;
 - `MAR I²C config` reports Custom pins/address or the Shared/Matrix Portal ownership model;
 - `MAR orientation` reports raw, mounting, invert, auto, setup, requested and applied rotations;
+- `MAR health` reports read/error/disconnect/reconnect counters and last-good age;
 - `MAR recovery` reports online/idle or offline retry countdown;
 - `MAR filter` reports threshold, hysteresis, stable and poll values;
-- `MAR allowed` reports the currently enabled automatic orientations;
+- `MAR allowed` reports enabled automatic orientations;
 - `MAR matrix` reports geometry class and final rotation capability.
 
 A failure before `sensor.begin()` must never be displayed as sensor `OK`.
 
-## 11. Pending hardware qualification
+## 12. Pending device qualification
 
-A confirmed MPU-6050 device still requires a dedicated hardware pass. Expected IDs are `0x68`/`0x69`; repeat sections 3, 4 and 6 when available.
-
-
-## Runtime disconnect / reconnect
-
-1. Start with the sensor detected and confirm auto rotation works.
-2. Disconnect SDA or sensor power while WLED is running.
-3. Confirm MAR keeps the last effective rotation and reports `sensor disconnected` after three failed reads.
-4. Confirm `MAR health` increments `errors` and `disconnects`.
-5. Reconnect the sensor.
-6. Wait up to 60 seconds without rebooting.
-7. Confirm MAR returns to `sensor ready`, increments `reconnects`, and resumes orientation updates.
-8. Repeat on Shared I²C with another sensor (for example PAJ7620) active; the other device must remain operational.
-
-## Calibration layout smoke test
-
-- Confirm `Sensor Mounting` and `Invert Rotation` appear in the left column.
-- Confirm `Auto Calibrate` is centered vertically in the right column across those two rows.
-- Confirm the orange instructions appear below the complete calibration block.
-- Confirm narrow/mobile layout stacks cleanly without horizontal overflow.
-- Confirm button gating and calibration behavior are unchanged from b014.
+A confirmed MPU-6050 device still requires a dedicated hardware pass. Expected IDs are `0x68`/`0x69`. This is a device-qualification gap, not a blocker for the already-qualified LIS3DH and ICM-20689 targets.

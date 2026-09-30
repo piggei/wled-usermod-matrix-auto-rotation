@@ -1,7 +1,7 @@
 # WLED Matrix Auto Rotation
 
-**Version:** `0.1.0-dev-b016`  
-**Status:** development baseline; LIS3DH, ICM-20689 and Shared I²C hardware-validated
+**Version:** `0.1.0`  
+**Status:** stable release; core rotation, calibration, Shared/Custom I²C and runtime sensor recovery hardware-validated
 
 A standalone WLED usermod that automatically rotates the **final 2D matrix raster** according to an accelerometer, without changing effect or segment state.
 
@@ -195,7 +195,7 @@ These fields are intended to make sensor wiring and orientation qualification po
 | Automatic rotation | ESP32-C3 + ICM-20689 | PASS |
 | Custom I²C on single-controller ESP32 | ESP32-C3 | PASS |
 | Shared I²C coexistence | ESP32-C3 + PAJ7620 + ICM-20689 | PASS |
-| Runtime disconnect/reconnect recovery | — | Pending hardware regression |
+| Runtime disconnect/reconnect recovery | ESP32-C3 + ICM-20689 | **PASS** |
 | Auto Calibrate mounting + direction | ESP32-C3 + ICM-20689, current inverted-face installation | PASS |
 | Two-column calibration UI | ESP32-C3 / WLED desktop UI | PASS |
 | MPU-6050-specific hardware | — | Pending |
@@ -204,8 +204,8 @@ These fields are intended to make sensor wiring and orientation qualification po
 
 - Per-pixel WLED CCT metadata is not rotated. This does not affect the tested RGB matrix targets.
 - Orientation is derived from X/Y gravity only; Z is intentionally ignored for orientation selection.
-- 90°/270° rotation of rectangular matrices is intentionally not performed.
 - MPU-6050 support is implemented but has not yet been qualified on a confirmed MPU-6050 device.
+- 90°/270° output on rectangular matrices is intentionally blocked because MAR does not alter WLED matrix geometry.
 
 ## Origin of the orientation algorithm
 

@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.1.0 - 2026-09-30
+
+First stable release. Promoted from `0.1.0-rc.1` after the available LIS3DH and ICM-20689 regression matrix, including Shared I²C, Auto Calibrate and runtime disconnect/reconnect recovery, passed on hardware without requiring runtime code changes.
+
+- Finalized package/version metadata as `0.1.0`.
+- Marked the README as the stable release.
+- Recorded the completed RC regression and disconnect/reconnect qualification.
+- Kept MPU-6050-specific hardware qualification and dedicated rectangular-matrix hardware testing as non-blocking follow-up work.
+- Runtime rotation, sensor, calibration, raster, recovery and I²C algorithms are unchanged from `0.1.0-rc.1`.
+
+## 0.1.0-rc.1 - 2026-09-30
+
+Release-candidate consolidation derived from the hardware-qualified b016 path.
+
+- Promoted the package/version metadata from development build b016 to `0.1.0-rc.1`.
+- Recorded runtime disconnect/reconnect recovery as hardware PASS.
+- Reworked the validation plan into an RC regression matrix and removed superseded development-build wording.
+- Cleaned the pre-release TODO list around actual remaining RC/final-release gates.
+- Clarified Custom-I²C comments without changing its runtime behavior.
+- Retained the complete development changelog for traceability.
+- No rotation, sensor, calibration, raster, recovery or I²C runtime algorithm was changed for RC1.
+
 ## 0.1.0-dev-b016
 
 - Consolidated the README around the current hardware-qualified UI and added the official auto-rotation demo GIF plus the latest configuration screenshot.
