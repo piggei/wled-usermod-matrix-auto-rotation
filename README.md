@@ -1,9 +1,13 @@
 # WLED Matrix Auto Rotation
 
-**Version:** `0.1.0-dev-b015`  
+**Version:** `0.1.0-dev-b016`  
 **Status:** development baseline; LIS3DH, ICM-20689 and Shared I²C hardware-validated
 
 A standalone WLED usermod that automatically rotates the **final 2D matrix raster** according to an accelerometer, without changing effect or segment state.
+
+<p align="center">
+  <img src="docs/images/auto-rotation-demo.gif" alt="WLED Matrix Auto Rotation demo" width="448">
+</p>
 
 ## Features
 
@@ -119,15 +123,18 @@ If `Sensor`, I²C mode, SDA/SCL or address are changed but not yet saved, `Auto 
 
 `Invert Rotation:` appears directly below `Sensor Mounting:`. The four detection/timing parameters are hidden until `Advanced:` is enabled. `Allow Rotation` controls which quarter-turn orientations may be accepted; at least one orientation is always retained.
 
-The screenshot shows the hardware-tested b014 calibration controls. b015 only reorganizes the same controls into a two-column calibration block; the screenshot will be refreshed after the b015 UI pass. Available I²C modes are `Matrix Portal`, `Shared` and `Custom`.
+The screenshot shows the current hardware-tested two-column calibration layout. Available I²C modes are `Matrix Portal`, `Shared` and `Custom`.
 
 ## Rectangular matrices
 
-A 90°/270° rotation swaps width and height. Because this usermod deliberately does not crop, resize or reconfigure WLED's matrix geometry:
+A 90°/270° rotation swaps width and height. MAR deliberately does not crop, resize or mutate WLED's matrix geometry, so final quarter-turns are valid only on square matrices.
 
-- square matrices support 0° / 90° / 180° / 270°;
-- rectangular matrices support 0° / 180°;
-- an effective 90°/270° on a rectangular matrix leaves the raster unchanged and is reported in WLED Info.
+- square matrices support final 0° / 90° / 180° / 270°;
+- rectangular matrices support final 0° / 180° only;
+- if the composed `Setup Rotation + Auto Rotation` requests 90° or 270° on a rectangular matrix, MAR blocks that final quarter-turn and applies the unrotated raster instead;
+- WLED Info reports both the **requested** and **applied** rotation, so the fallback is explicit rather than silent.
+
+`Sensor Mounting`, `Invert Rotation` and the automatic orientation engine are not altered by this guard. Only the final raster rotation is constrained by matrix geometry.
 
 ## PlatformIO / WLED integration
 
@@ -163,12 +170,16 @@ While offline, MAR retries sensor initialization every 60 seconds and resumes au
 The usermod reports:
 
 - build/version and status;
-- I²C mode;
+- runtime state (`enabled`, auto-rotation state and sensor readiness);
+- I²C mode plus effective bus configuration;
 - detected sensor, address and device ID;
 - live X/Y/Z acceleration;
-- complete orientation pipeline: stable axis, raw rotation, sensor mounting, inversion, automatic rotation, setup rotation and effective rotation;
+- complete orientation pipeline: stable axis, raw rotation, sensor mounting, inversion, automatic rotation, setup rotation, **requested** final rotation and **applied** final rotation;
 - runtime health counters: successful reads, read errors, consecutive errors, disconnects, reconnects and last-good sample age;
-- matrix geometry and unsupported-rotation diagnostics.
+- reconnect state and time until the next retry while offline;
+- active threshold/hysteresis/stable/poll filter values;
+- allowed automatic orientations;
+- matrix geometry, square/rectangular capability and blocked-quarter-turn diagnostics.
 
 These fields are intended to make sensor wiring and orientation qualification possible without adding debug code.
 
@@ -186,6 +197,7 @@ These fields are intended to make sensor wiring and orientation qualification po
 | Shared I²C coexistence | ESP32-C3 + PAJ7620 + ICM-20689 | PASS |
 | Runtime disconnect/reconnect recovery | — | Pending hardware regression |
 | Auto Calibrate mounting + direction | ESP32-C3 + ICM-20689, current inverted-face installation | PASS |
+| Two-column calibration UI | ESP32-C3 / WLED desktop UI | PASS |
 | MPU-6050-specific hardware | — | Pending |
 
 ## Known limitations

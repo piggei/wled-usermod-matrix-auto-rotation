@@ -1,6 +1,6 @@
-# v0.1.0-dev-b015 validation plan
+# v0.1.0-dev-b016 validation plan
 
-Current status: b014 Auto Calibrate passed on the current ESP32-C3 + ICM-20689 inverted-face installation. b015 changes only the calibration-block layout.
+Current status: Auto Calibrate and the b015 two-column calibration layout passed on the current ESP32-C3 + ICM-20689 installation. b016 consolidates documentation, diagnostics and rectangular-matrix behavior.
 
 This plan covers current behavior only. Historical development-build migrations are regression-tested in code/config handling but are intentionally omitted from the user-facing test procedure.
 
@@ -129,10 +129,12 @@ On single-controller ESP32 targets, document that Custom rebinds the sole contro
 
 For a non-square matrix:
 
-- 0° and 180° must rotate normally;
-- effective 90°/270° must leave the raster unchanged;
-- WLED Info must report the unsupported rotation condition;
-- no crop, resize or geometry mutation is allowed.
+- final 0° and 180° must rotate normally;
+- a composed final request of 90°/270° must apply 0° instead of attempting a crop, resize or geometry mutation;
+- `MAR orientation` must show different `requested` and `applied` values for a blocked quarter-turn;
+- `MAR matrix` must identify the geometry as rectangular, report `final 0/180 only`, and flag a blocked quarter-turn while it is requested;
+- returning to a supported request must clear the blocked state automatically;
+- square matrices must continue to report full 0/90/180/270 capability.
 
 ## 10. Diagnostics and error paths
 
@@ -143,6 +145,16 @@ Verify meaningful status for:
 - configuration write/read-back failure;
 - framebuffer allocation failure;
 - unsupported rectangular rotation.
+
+Also verify the b016 diagnostic set:
+
+- `MAR runtime` reports enabled/auto/sensor-ready state;
+- `MAR I²C config` reports Custom pins/address or the Shared/Matrix Portal ownership model;
+- `MAR orientation` reports raw, mounting, invert, auto, setup, requested and applied rotations;
+- `MAR recovery` reports online/idle or offline retry countdown;
+- `MAR filter` reports threshold, hysteresis, stable and poll values;
+- `MAR allowed` reports the currently enabled automatic orientations;
+- `MAR matrix` reports geometry class and final rotation capability.
 
 A failure before `sensor.begin()` must never be displayed as sensor `OK`.
 
@@ -162,7 +174,7 @@ A confirmed MPU-6050 device still requires a dedicated hardware pass. Expected I
 7. Confirm MAR returns to `sensor ready`, increments `reconnects`, and resumes orientation updates.
 8. Repeat on Shared I²C with another sensor (for example PAJ7620) active; the other device must remain operational.
 
-## b015 calibration layout smoke test
+## Calibration layout smoke test
 
 - Confirm `Sensor Mounting` and `Invert Rotation` appear in the left column.
 - Confirm `Auto Calibrate` is centered vertically in the right column across those two rows.

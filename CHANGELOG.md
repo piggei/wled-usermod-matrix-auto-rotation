@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.1.0-dev-b016
+
+- Consolidated the README around the current hardware-qualified UI and added the official auto-rotation demo GIF plus the latest configuration screenshot.
+- Expanded WLED Info diagnostics with runtime state, I²C configuration, reconnect countdown, filter values and allowed orientations.
+- Split final rotation diagnostics into `requested` and `applied` values.
+- Hardened rectangular-matrix behavior: composed final 90°/270° requests are explicitly blocked and deterministically fall back to the unrotated raster, without crop, resize or WLED geometry mutation.
+- `MAR matrix` now reports square/rectangular capability and whether a quarter-turn request is currently blocked.
+- Updated regression documentation and TODO state.
+
 ## 0.1.0-dev-b015
 
 - Reworked only the `Auto Calibrate` presentation; calibration and runtime behavior are unchanged from b014.

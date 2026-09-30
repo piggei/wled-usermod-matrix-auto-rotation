@@ -1,6 +1,6 @@
 {
   "name": "wled-usermod-matrix-auto-rotation",
-  "version": "0.1.0-dev-b015",
+  "version": "0.1.0-dev-b016",
   "description": "WLED matrix auto-rotation usermod for LIS3DH, MPU-6050 and ICM-20689 accelerometers",
   "build": {
     "libArchive": false

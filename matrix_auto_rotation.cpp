@@ -7,14 +7,14 @@
 #include "matrix_auto_rotation_sensor.h"
 
 // WLED Matrix Auto Rotation
-// v0.1.0-dev build 13
+// v0.1.0-dev build 16
 //
 // Design rule: the usermod never modifies effect/segment state. Rotation is
 // applied in handleOverlayDraw(), after WLED has composited the final logical
 // raster and immediately before WLED applies its own logical->physical ledmap.
 
 namespace {
-constexpr char MAR_VERSION[] = "0.1.0-dev-b015";
+constexpr char MAR_VERSION[] = "0.1.0-dev-b016";
 constexpr uint8_t I2C_MODE_MATRIXPORTAL = 0;
 constexpr uint8_t I2C_MODE_CUSTOM = 1;
 constexpr uint8_t I2C_MODE_SHARED = 4;
@@ -96,6 +96,7 @@ private:
   uint32_t _candidateSince = 0;
   int8_t _candidateAutoRotation = ORIENT_UNKNOWN;
   int8_t _stableAutoRotation = ORIENT_UNKNOWN;
+  uint8_t _requestedRotation = 0;
   uint8_t _effectiveRotation = 0;
   bool _rotationUnsupported = false;
 
@@ -253,15 +254,37 @@ private:
     _lastSample = MARAccelSample{};
   }
 
+  bool matrixIsRectangular() const {
+#ifndef WLED_DISABLE_2D
+    return Segment::maxWidth > 0 && Segment::maxHeight > 0 && Segment::maxWidth != Segment::maxHeight;
+#else
+    return false;
+#endif
+  }
+
+  uint8_t appliedRotationFor(uint8_t requested) const {
+    // A quarter-turn swaps width and height. MAR deliberately never crops,
+    // rescales or rewrites WLED matrix geometry, so 90/270 are blocked on
+    // rectangular matrices. The unrotated raster is the deterministic fallback.
+    if (matrixIsRectangular() && (requested == 1 || requested == 3)) return 0;
+    return requested;
+  }
+
   void updateEffectiveRotation(bool forceTrigger = false) {
     const uint8_t base = quarterTurnsFromDegrees(_setupRotationDeg);
     uint8_t automatic = 0;
     if (_autoRotationEnabled && _stableAutoRotation != ORIENT_UNKNOWN) automatic = uint8_t(_stableAutoRotation);
-    const uint8_t next = normalizeQuarterTurns(int(base) + int(automatic));
-    if (next != _effectiveRotation || forceTrigger) {
-      _effectiveRotation = next;
-      strip.trigger();
-    }
+
+    const uint8_t requested = normalizeQuarterTurns(int(base) + int(automatic));
+    const uint8_t applied = appliedRotationFor(requested);
+    const bool unsupported = requested != applied;
+    const bool changed = requested != _requestedRotation || applied != _effectiveRotation || unsupported != _rotationUnsupported;
+
+    _requestedRotation = requested;
+    _effectiveRotation = applied;
+    _rotationUnsupported = unsupported;
+
+    if (changed || forceTrigger) strip.trigger();
   }
 
   bool initializeSensor() {
@@ -303,7 +326,9 @@ private:
 
     if (!_enabled) {
       stopCustomBus();
+      _requestedRotation = 0;
       _effectiveRotation = 0;
+      _rotationUnsupported = false;
       strip.trigger();
       return;
     }
@@ -479,19 +504,23 @@ public:
 
   void handleOverlayDraw() override {
 #ifndef WLED_DISABLE_2D
-    if (!_enabled || _effectiveRotation == 0) return;
+    if (!_enabled) return;
 
     const uint16_t width = Segment::maxWidth;
     const uint16_t height = Segment::maxHeight;
     if (width < 2 || height < 2) return;
 
-    // Quarter-turns on non-square matrices change the logical dimensions.
-    // This usermod deliberately does not crop/rescale/reconfigure WLED geometry.
-    if ((_effectiveRotation == 1 || _effectiveRotation == 3) && width != height) {
-      _rotationUnsupported = true;
-      return;
+    // Re-resolve the applied rotation in case WLED matrix geometry changed
+    // since the last sensor/config update. This keeps diagnostics and output in
+    // sync without mutating the WLED matrix dimensions.
+    const uint8_t applied = appliedRotationFor(_requestedRotation);
+    const bool unsupported = applied != _requestedRotation;
+    if (applied != _effectiveRotation || unsupported != _rotationUnsupported) {
+      _effectiveRotation = applied;
+      _rotationUnsupported = unsupported;
     }
-    _rotationUnsupported = false;
+
+    if (_effectiveRotation == 0) return;
 
     const size_t matrixPixels = size_t(width) * size_t(height);
     if (matrixPixels > strip.getLengthTotal()) {
@@ -544,6 +573,24 @@ public:
     JsonArray busMode = user.createNestedArray(F("MAR I²C mode"));
     busMode.add(_i2cMode == I2C_MODE_SHARED ? "Shared (WLED Wire)" : (_i2cMode == I2C_MODE_CUSTOM ? "Custom" : "Matrix Portal"));
 
+    char busText[96];
+    if (_i2cMode == I2C_MODE_CUSTOM) {
+      if (_configuredAddress) snprintf(busText, sizeof(busText), "SDA %d | SCL %d | address 0x%02X", _customSda, _customScl, _configuredAddress);
+      else snprintf(busText, sizeof(busText), "SDA %d | SCL %d | address auto", _customSda, _customScl);
+    } else if (_i2cMode == I2C_MODE_SHARED) {
+      snprintf(busText, sizeof(busText), "owned by WLED | address auto");
+    } else {
+      snprintf(busText, sizeof(busText), "board-default Wire | address auto");
+    }
+    JsonArray bus = user.createNestedArray(F("MAR I²C config"));
+    bus.add(busText);
+
+    char runtimeText[80];
+    snprintf(runtimeText, sizeof(runtimeText), "enabled %s | auto %s | sensor %s", _enabled ? "on" : "off",
+      _autoRotationEnabled ? "on" : "off", _sensorReady ? "ready" : "not ready");
+    JsonArray runtime = user.createNestedArray(F("MAR runtime"));
+    runtime.add(runtimeText);
+
     char sensorText[48];
     if (_sensorReady) {
       snprintf(sensorText, sizeof(sensorText), "%s @ 0x%02X | ID 0x%02X", _sensor.name(), _sensor.address(), _sensor.whoAmI());
@@ -564,11 +611,12 @@ public:
     JsonArray accel = user.createNestedArray(F("MAR acceleration"));
     accel.add(accelText);
 
-    char orientText[144];
+    char orientText[176];
     const int rawDeg = _stableDirection == DIR_UNKNOWN ? -1 : int(degreesFromQuarterTurns(rotationForDirection(_stableDirection)));
     const int stableAutoDeg = _stableAutoRotation == ORIENT_UNKNOWN ? -1 : int(degreesFromQuarterTurns(uint8_t(_stableAutoRotation)));
-    snprintf(orientText, sizeof(orientText), "axis %s | raw %d | mounting %u | invert %s | auto %d | setup %u | effective %u",
-      directionName(_stableDirection), rawDeg, _sensorMountingDeg, _invertRotation ? "on" : "off", stableAutoDeg, _setupRotationDeg, degreesFromQuarterTurns(_effectiveRotation));
+    snprintf(orientText, sizeof(orientText), "axis %s | raw %d | mounting %u | invert %s | auto %d | setup %u | requested %u | applied %u",
+      directionName(_stableDirection), rawDeg, _sensorMountingDeg, _invertRotation ? "on" : "off", stableAutoDeg, _setupRotationDeg,
+      degreesFromQuarterTurns(_requestedRotation), degreesFromQuarterTurns(_effectiveRotation));
     JsonArray orient = user.createNestedArray(F("MAR orientation"));
     orient.add(orientText);
 
@@ -587,9 +635,42 @@ public:
     JsonArray health = user.createNestedArray(F("MAR health"));
     health.add(healthText);
 
-    char matrixText[64];
-    snprintf(matrixText, sizeof(matrixText), "%ux%u%s", Segment::maxWidth, Segment::maxHeight,
-      _rotationUnsupported ? " | 90/270 unsupported" : "");
+    char recoveryText[96];
+    if (_sensorReady) {
+      snprintf(recoveryText, sizeof(recoveryText), "online | retry idle");
+    } else if (!_enabled || !_autoRotationEnabled) {
+      snprintf(recoveryText, sizeof(recoveryText), "inactive");
+    } else {
+      uint32_t retryInterval = SENSOR_RECONNECT_INTERVAL_MS;
+      if (!_sensorEverReady && _i2cMode == I2C_MODE_SHARED && uint32_t(nowInfo - _runtimeStartedAt) <= SHARED_BOOT_RETRY_WINDOW_MS) {
+        retryInterval = SHARED_BOOT_RETRY_INTERVAL_MS;
+      }
+      const uint32_t elapsed = uint32_t(nowInfo - _lastSensorInitAttemptAt);
+      const uint32_t remaining = elapsed >= retryInterval ? 0u : retryInterval - elapsed;
+      snprintf(recoveryText, sizeof(recoveryText), "%s | retry in %lu ms", _sensorEverReady ? "offline" : "waiting for sensor", (unsigned long)remaining);
+    }
+    JsonArray recovery = user.createNestedArray(F("MAR recovery"));
+    recovery.add(recoveryText);
+
+    char filterText[128];
+    snprintf(filterText, sizeof(filterText), "threshold %.2f g | hysteresis %.2f g | stable %u ms | poll %u ms",
+      _axisThresholdG, _hysteresisG, _stableTimeMs, _pollIntervalMs);
+    JsonArray filter = user.createNestedArray(F("MAR filter"));
+    filter.add(filterText);
+
+    char allowText[48];
+    snprintf(allowText, sizeof(allowText), "%s%s%s%s", _allow0 ? "0 " : "", _allow90 ? "90 " : "", _allow180 ? "180 " : "", _allow270 ? "270" : "");
+    JsonArray allowedInfo = user.createNestedArray(F("MAR allowed"));
+    allowedInfo.add(allowText);
+
+    char matrixText[112];
+    const bool rectangular = matrixIsRectangular();
+    if (rectangular) {
+      snprintf(matrixText, sizeof(matrixText), "%ux%u rectangular | final 0/180 only%s", Segment::maxWidth, Segment::maxHeight,
+        _rotationUnsupported ? " | requested quarter-turn blocked" : "");
+    } else {
+      snprintf(matrixText, sizeof(matrixText), "%ux%u square | final 0/90/180/270", Segment::maxWidth, Segment::maxHeight);
+    }
     JsonArray matrix = user.createNestedArray(F("MAR matrix"));
     matrix.add(matrixText);
 

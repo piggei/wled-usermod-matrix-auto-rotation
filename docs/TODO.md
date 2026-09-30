@@ -4,9 +4,10 @@
 
 - Hardware-regression-test runtime disconnect/reconnect recovery on LIS3DH and ICM-20689.
 - Complete the remaining `Auto Calibrate` regression on a normal-face sensor installation; the current inverted-face ESP32-C3 + ICM-20689 installation has passed and `Setup Rotation` remained untouched.
-- Hardware-smoke-test the b015 two-column calibration layout on desktop and a narrow/mobile viewport.
+- Smoke-test the responsive calibration layout on a narrow/mobile viewport.
 - Verify Shared I²C recovery while PAJ7620 remains active on the same bus.
 - Re-run the 0/90/180/270, Setup Rotation and Invert Rotation regression matrix.
+- Hardware-test the b016 rectangular-matrix requested/applied guard if a rectangular matrix is available.
 - Static audit and documentation consistency pass before the first release candidate.
 
 ## 0.2.0 candidates
