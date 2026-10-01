@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.1.1 - 2026-10-01
+
+Stable release promoted from `0.1.1-rc.1` after the Waveshare ESP32-S3 RGB Matrix + QMI8658 release-candidate smoke test passed without runtime changes.
+
+- Finalized package/version metadata as `0.1.1`.
+- Confirmed the Waveshare ESP32-S3 RGB Matrix preset on SDA47/SCL48 with the onboard QMI8658 detected at `0x6B` / `WHO_AM_I 0x05`.
+- Confirmed automatic rotation and Auto Calibrate on a 64×64 HUB75 matrix.
+- Recorded a qualification snapshot of 1146 successful QMI8658 reads with 0 errors and no spurious disconnect/reconnect events.
+- Completed documentation/version consistency audit and promoted RC wording to stable-release wording.
+- Kept confirmed genuine MPU-6050 hardware qualification and dedicated rectangular-matrix hardware testing as non-blocking follow-up work.
+- Runtime rotation, sensor, calibration, raster, recovery and I²C algorithms are unchanged from `0.1.1-rc.1`.
+
 ## 0.1.1-rc.1 - 2026-10-01
 
 Release-candidate promotion of the hardware-qualified QMI8658 / Waveshare development path.

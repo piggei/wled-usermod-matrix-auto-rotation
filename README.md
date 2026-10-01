@@ -1,7 +1,7 @@
 # WLED Matrix Auto Rotation
 
-**Version:** `0.1.1-rc.1`  
-**Status:** release candidate based on the hardware-qualified 0.1.1 development path; adds QMI8658 / Waveshare ESP32-S3 RGB Matrix support on top of the stable 0.1.0 release
+**Version:** `0.1.1`  
+**Status:** stable release; adds hardware-qualified QMI8658 / Waveshare ESP32-S3 RGB Matrix support on top of the 0.1.0 feature baseline
 
 A standalone WLED usermod that automatically rotates the **final 2D matrix raster** according to an accelerometer, without changing effect or segment state.
 
@@ -201,9 +201,11 @@ These fields are intended to make sensor wiring and orientation qualification po
 | Runtime disconnect/reconnect recovery | ESP32-C3 + ICM-20689 | **PASS** |
 | Auto Calibrate mounting + direction | ESP32-C3 + ICM-20689, current inverted-face installation | PASS |
 | Two-column calibration UI | ESP32-C3 / WLED desktop UI | PASS |
-| QMI8658 detection and XYZ | Waveshare ESP32-S3 RGB Matrix | **PASS** |
-| QMI8658 automatic rotation / Auto Calibrate | Waveshare ESP32-S3 RGB Matrix | **PASS** |
+| QMI8658 detection and XYZ | Waveshare ESP32-S3 RGB Matrix + 64×64 HUB75 | **PASS** |
+| QMI8658 automatic rotation / Auto Calibrate | Waveshare ESP32-S3 RGB Matrix + 64×64 HUB75 | **PASS** |
 | MPU-6050-specific hardware | — | Pending |
+
+The v0.1.1 qualification run on the Waveshare target used WLED 17.0.0-devV5 with a 64×64 HUB75 matrix. The onboard QMI8658 was detected at `0x6B` with `WHO_AM_I = 0x05`; the captured runtime snapshot reported 1146 successful samples, 0 read errors and no spurious disconnect/reconnect events.
 
 ## Known limitations
 

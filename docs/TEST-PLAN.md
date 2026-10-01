@@ -1,6 +1,6 @@
-# v0.1.1-rc.1 validation plan
+# v0.1.1 validation plan
 
-`0.1.1-rc.1` is the release-candidate promotion of the hardware-qualified QMI8658 / Waveshare development path. Existing 0.1.0 sensor and rotation paths remain the regression baseline, and no runtime algorithm changes are introduced by the RC promotion.
+`0.1.1` is the stable promotion of the hardware-qualified QMI8658 / Waveshare path. Existing 0.1.0 sensor and rotation paths remain the regression baseline, and the final promotion from RC1 introduces no runtime algorithm changes.
 
 Hardware validated for the 0.1.0 release:
 
@@ -138,7 +138,7 @@ On single-controller ESP32 targets, Custom rebinds the sole controller; use Shar
 
 ## 9. Runtime disconnect/reconnect
 
-Hardware status for 0.1.0: **PASS**.
+Hardware status: **PASS** (qualified in 0.1.0 and carried forward unchanged into 0.1.1).
 
 Regression procedure:
 
@@ -162,7 +162,7 @@ For a non-square matrix:
 - returning to a supported request clears the blocked state automatically;
 - square matrices continue to report full 0/90/180/270 capability.
 
-This guard is statically verified for 0.1.0; a dedicated rectangular hardware regression remains desirable when suitable hardware is available.
+This guard is statically verified for 0.1.1; a dedicated rectangular hardware regression remains desirable when suitable hardware is available.
 
 ## 11. Diagnostics and error paths
 
@@ -174,7 +174,7 @@ Verify meaningful status for:
 - framebuffer allocation failure;
 - blocked rectangular quarter-turn.
 
-Verify the 0.1.0 diagnostic set:
+Verify the 0.1.1 diagnostic set:
 
 - `MAR runtime` reports enabled/auto/sensor-ready state;
 - `MAR I²C config` reports Custom pins/address or the Shared/Matrix Portal ownership model;
@@ -194,7 +194,7 @@ A confirmed MPU-6050 device still requires a dedicated hardware pass. Expected I
 
 ## 13. Waveshare ESP32-S3 RGB Matrix + QMI8658
 
-Hardware-qualified release-candidate target for `0.1.1-rc.1`.
+Hardware-qualified stable-release target for `0.1.1`.
 
 Board preset:
 
@@ -221,8 +221,12 @@ Hardware result:
 - Waveshare SDA47/SCL48 preset: **PASS**.
 - No changes were required to the common orientation engine or raster-rotation path.
 
-Recommended regression before release promotion:
+Final Waveshare release qualification snapshot:
 
-1. Re-run one LIS3DH smoke test.
-2. Re-run one ICM-20689 smoke test.
-3. Confirm Save + reboot persistence on the Waveshare target.
+- WLED: `17.0.0-devV5`;
+- matrix: `64x64` HUB75;
+- detected device: `QMI8658 @ 0x6B | ID 0x05`;
+- bus: SDA `47` / SCL `48`;
+- health snapshot: `1146` successful reads, `0` errors, `0` disconnects, `0` reconnects;
+- automatic rotation: **PASS**;
+- Auto Calibrate: **PASS**.

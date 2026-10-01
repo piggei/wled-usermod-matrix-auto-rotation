@@ -1,13 +1,13 @@
 # Roadmap / TODO
 
-## 0.1.0 status
+## Stable release status
 
-The available-hardware RC regression matrix passed and `0.1.0` was promoted to the first stable release without runtime code changes after RC1.
+`0.1.1` is the current stable release. It carries forward the qualified 0.1.0 feature set and adds hardware-qualified QMI8658 support plus the Waveshare ESP32-S3 RGB Matrix I²C preset.
 
 ## Device qualification status
 
 - Confirm the MPU-family backend on a known genuine MPU-6050 (`WHO_AM_I 0x68/0x69`).
-- QMI8658 on Waveshare ESP32-S3 RGB Matrix (SDA 47 / SCL 48): **hardware-qualified and promoted to 0.1.1-rc.1**.
+- QMI8658 on Waveshare ESP32-S3 RGB Matrix (SDA 47 / SCL 48): **hardware-qualified and released in 0.1.1**.
 
 ## 0.2.0 candidates
 
