@@ -1,6 +1,6 @@
-# v0.1.0 validation plan
+# v0.1.1-rc.1 validation plan
 
-`0.1.0` is the first stable release, promoted from the hardware-qualified `0.1.0-rc.1` candidate after the available regression matrix passed without requiring runtime code changes.
+`0.1.1-rc.1` is the release-candidate promotion of the hardware-qualified QMI8658 / Waveshare development path. Existing 0.1.0 sensor and rotation paths remain the regression baseline, and no runtime algorithm changes are introduced by the RC promotion.
 
 Hardware validated for the 0.1.0 release:
 
@@ -27,7 +27,7 @@ Verify:
 - the button is disabled until the configured sensor is detected and the current orientation is stable;
 - changing Sensor or I²C hardware fields without saving disables the button;
 - `I²C` is shown as a section heading;
-- modes are `Matrix Portal`, `Shared`, `Custom`;
+- modes are `Matrix Portal`, `Waveshare ESP32-S3 RGB Matrix`, `Shared`, `Custom`;
 - SDA/SCL/Address appear only for `Custom`;
 - `Advanced:` reveals Threshold G, Hysteresis G, Stable Ms and Poll Ms;
 - `Allow Rotation` displays 0 / 90 / 180 / 270 and prevents an empty allow mask;
@@ -187,6 +187,42 @@ Verify the 0.1.0 diagnostic set:
 
 A failure before `sensor.begin()` must never be displayed as sensor `OK`.
 
-## 12. Pending device qualification
+## 12. Remaining device qualification
 
 A confirmed MPU-6050 device still requires a dedicated hardware pass. Expected IDs are `0x68`/`0x69`. This is a device-qualification gap, not a blocker for the already-qualified LIS3DH and ICM-20689 targets.
+
+
+## 13. Waveshare ESP32-S3 RGB Matrix + QMI8658
+
+Hardware-qualified release-candidate target for `0.1.1-rc.1`.
+
+Board preset:
+
+- I²C Mode: `Waveshare ESP32-S3 RGB Matrix`;
+- SDA: GPIO47;
+- SCL: GPIO48;
+- Sensor: `QMI8658`;
+- address: auto-probe `0x6A` then `0x6B`;
+- expected `WHO_AM_I`: `0x05`.
+
+Expected WLED Info after boot:
+
+- `MAR status: sensor ready`;
+- `MAR I²C mode: Waveshare ESP32-S3 RGB Matrix`;
+- `MAR I²C config: SDA 47 | SCL 48 | address auto`;
+- sensor identified as `QMI8658 @ 0x6A/0x6B | ID 0x05`;
+- live X/Y/Z acceleration values with one gravity-dominant axis near 1 g while upright.
+
+Hardware result:
+
+- QMI8658 detection and live XYZ values: **PASS**.
+- Automatic 0°/90°/180°/270° rotation: **PASS**.
+- `Auto Calibrate`: **PASS**.
+- Waveshare SDA47/SCL48 preset: **PASS**.
+- No changes were required to the common orientation engine or raster-rotation path.
+
+Recommended regression before release promotion:
+
+1. Re-run one LIS3DH smoke test.
+2. Re-run one ICM-20689 smoke test.
+3. Confirm Save + reboot persistence on the Waveshare target.

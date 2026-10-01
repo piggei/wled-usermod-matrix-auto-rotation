@@ -17,10 +17,21 @@ constexpr uint8_t MPU_FAMILY_REG_ACCEL_CONFIG2 = 0x1D;
 constexpr uint8_t MPU6050_REG_ACCEL_XOUT_H = 0x3B;
 constexpr uint8_t MPU6050_REG_PWR_MGMT_1 = 0x6B;
 constexpr uint8_t MPU6050_REG_WHO_AM_I = 0x75;
+
+constexpr uint8_t QMI8658_ADDR_PRIMARY = 0x6A;
+constexpr uint8_t QMI8658_ADDR_SECONDARY = 0x6B;
+constexpr uint8_t QMI8658_REG_WHO_AM_I = 0x00;
+constexpr uint8_t QMI8658_WHO_AM_I = 0x05;
+constexpr uint8_t QMI8658_REG_CTRL1 = 0x02;
+constexpr uint8_t QMI8658_REG_CTRL2 = 0x03;
+constexpr uint8_t QMI8658_REG_CTRL5 = 0x06;
+constexpr uint8_t QMI8658_REG_CTRL7 = 0x08;
+constexpr uint8_t QMI8658_REG_ACCEL_X_L = 0x35;
 }
 
 const char *MARAccelerometer::name() const {
-  if (_type != MARSensorType::MPU6050) return "LIS3DH";
+  if (_type == MARSensorType::LIS3DH) return "LIS3DH";
+  if (_type == MARSensorType::QMI8658) return "QMI8658";
   if (_whoAmI == 0x98) return "ICM-20689";
   if (_whoAmI == 0x68 || _whoAmI == 0x69) return "MPU-6050";
   return "MPU-6050 / ICM-20689";
@@ -53,13 +64,22 @@ bool MARAccelerometer::begin(TwoWire &wire, MARSensorType type, uint8_t configur
     if (probeAddress(LIS3DH_ADDR_PRIMARY)) _address = LIS3DH_ADDR_PRIMARY;
     else if (probeAddress(LIS3DH_ADDR_SECONDARY)) _address = LIS3DH_ADDR_SECONDARY;
     else return false;
+  } else if (_type == MARSensorType::QMI8658) {
+    if (probeAddress(QMI8658_ADDR_PRIMARY)) _address = QMI8658_ADDR_PRIMARY;
+    else if (probeAddress(QMI8658_ADDR_SECONDARY)) _address = QMI8658_ADDR_SECONDARY;
+    else return false;
   } else {
     if (probeAddress(MPU6050_ADDR_PRIMARY)) _address = MPU6050_ADDR_PRIMARY;
     else if (probeAddress(MPU6050_ADDR_SECONDARY)) _address = MPU6050_ADDR_SECONDARY;
     else return false;
   }
 
-  _ready = (_type == MARSensorType::LIS3DH) ? initLIS3DH() : initMPU6050();
+  switch (_type) {
+    case MARSensorType::LIS3DH: _ready = initLIS3DH(); break;
+    case MARSensorType::QMI8658: _ready = initQMI8658(); break;
+    case MARSensorType::MPU6050:
+    default: _ready = initMPU6050(); break;
+  }
   return _ready;
 }
 
@@ -75,7 +95,10 @@ bool MARAccelerometer::probeAddress(uint8_t address) {
   const uint8_t previous = _address;
   _address = address;
   uint8_t who = 0;
-  const bool readOk = readRegister(_type == MARSensorType::LIS3DH ? LIS3DH_REG_WHO_AM_I : MPU6050_REG_WHO_AM_I, who);
+  uint8_t whoReg = MPU6050_REG_WHO_AM_I;
+  if (_type == MARSensorType::LIS3DH) whoReg = LIS3DH_REG_WHO_AM_I;
+  else if (_type == MARSensorType::QMI8658) whoReg = QMI8658_REG_WHO_AM_I;
+  const bool readOk = readRegister(whoReg, who);
   _address = previous;
   if (!readOk) {
     _initError = MARSensorInitError::WHO_AM_I_READ_FAILED;
@@ -83,9 +106,10 @@ bool MARAccelerometer::probeAddress(uint8_t address) {
   }
 
   _whoAmI = who;
-  const bool matches = (_type == MARSensorType::LIS3DH)
-    ? (who == LIS3DH_WHO_AM_I)
-    : (who == 0x68 || who == 0x69 || who == 0x98);
+  bool matches = false;
+  if (_type == MARSensorType::LIS3DH) matches = (who == LIS3DH_WHO_AM_I);
+  else if (_type == MARSensorType::QMI8658) matches = (who == QMI8658_WHO_AM_I);
+  else matches = (who == 0x68 || who == 0x69 || who == 0x98);
   if (!matches) {
     _initError = MARSensorInitError::WHO_AM_I_MISMATCH;
     return false;
@@ -142,9 +166,49 @@ bool MARAccelerometer::initMPU6050() {
   return true;
 }
 
+bool MARAccelerometer::initQMI8658() {
+  // Waveshare ESP32-S3 RGB Matrix uses QMI8658 on the onboard I2C bus.
+  // Configure accelerometer only: +/-4 g, 125 Hz, LPF mode 0. Gyro remains off.
+  uint8_t ctrl1 = 0;
+  uint8_t ctrl5 = 0;
+  if (!readRegister(QMI8658_REG_CTRL1, ctrl1) || !readRegister(QMI8658_REG_CTRL5, ctrl5)) {
+    _initError = MARSensorInitError::CONFIG_WRITE_FAILED;
+    return false;
+  }
+
+  // Enable sequential register addressing (bit 6) and make sure the device is powered.
+  ctrl1 = uint8_t((ctrl1 | 0x40u) & ~0x02u);
+  // Disable sensors while changing the profile.
+  if (!writeRegister(QMI8658_REG_CTRL7, 0x00) ||
+      !writeRegister(QMI8658_REG_CTRL1, ctrl1) ||
+      !writeRegister(QMI8658_REG_CTRL2, 0x16) ||
+      !writeRegister(QMI8658_REG_CTRL5, uint8_t((ctrl5 & 0xF0u) | 0x01u)) ||
+      !writeRegister(QMI8658_REG_CTRL7, 0x01)) {
+    _initError = MARSensorInitError::CONFIG_WRITE_FAILED;
+    return false;
+  }
+  delay(10);
+
+  if (!verifyRegisterMasked(QMI8658_REG_CTRL1, 0x42, 0x40) ||
+      !verifyRegisterMasked(QMI8658_REG_CTRL2, 0x3F, 0x16) ||
+      !verifyRegisterMasked(QMI8658_REG_CTRL5, 0x0F, 0x01) ||
+      !verifyRegisterMasked(QMI8658_REG_CTRL7, 0x03, 0x01)) {
+    _initError = MARSensorInitError::CONFIG_VERIFY_FAILED;
+    return false;
+  }
+
+  _initError = MARSensorInitError::NONE;
+  return true;
+}
+
 bool MARAccelerometer::read(MARAccelSample &sample) {
   if (!_ready || !_wire || !_address) return false;
-  return _type == MARSensorType::LIS3DH ? readLIS3DH(sample) : readMPU6050(sample);
+  switch (_type) {
+    case MARSensorType::LIS3DH: return readLIS3DH(sample);
+    case MARSensorType::QMI8658: return readQMI8658(sample);
+    case MARSensorType::MPU6050:
+    default: return readMPU6050(sample);
+  }
 }
 
 bool MARAccelerometer::readLIS3DH(MARAccelSample &sample) {
@@ -169,6 +233,20 @@ bool MARAccelerometer::readMPU6050(MARAccelSample &sample) {
   const int16_t rawY = static_cast<int16_t>((uint16_t(data[2]) << 8) | data[3]);
   const int16_t rawZ = static_cast<int16_t>((uint16_t(data[4]) << 8) | data[5]);
   constexpr float scale = 1.0f / 16384.0f; // +/-2g
+  sample.xG = rawX * scale;
+  sample.yG = rawY * scale;
+  sample.zG = rawZ * scale;
+  return true;
+}
+
+bool MARAccelerometer::readQMI8658(MARAccelSample &sample) {
+  uint8_t data[6];
+  if (!readRegisters(QMI8658_REG_ACCEL_X_L, data, sizeof(data))) return false;
+
+  const int16_t rawX = static_cast<int16_t>((uint16_t(data[1]) << 8) | data[0]);
+  const int16_t rawY = static_cast<int16_t>((uint16_t(data[3]) << 8) | data[2]);
+  const int16_t rawZ = static_cast<int16_t>((uint16_t(data[5]) << 8) | data[4]);
+  constexpr float scale = 4.0f / 32768.0f; // +/-4g
   sample.xG = rawX * scale;
   sample.yG = rawY * scale;
   sample.zG = rawZ * scale;

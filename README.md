@@ -1,7 +1,7 @@
 # WLED Matrix Auto Rotation
 
-**Version:** `0.1.0`  
-**Status:** stable release; core rotation, calibration, Shared/Custom I²C and runtime sensor recovery hardware-validated
+**Version:** `0.1.1-rc.1`  
+**Status:** release candidate based on the hardware-qualified 0.1.1 development path; adds QMI8658 / Waveshare ESP32-S3 RGB Matrix support on top of the stable 0.1.0 release
 
 A standalone WLED usermod that automatically rotates the **final 2D matrix raster** according to an accelerometer, without changing effect or segment state.
 
@@ -19,7 +19,8 @@ A standalone WLED usermod that automatically rotates the **final 2D matrix raste
 - Threshold, hysteresis, stable time and polling controls under `Advanced`.
 - LIS3DH backend.
 - MPU-6050 / ICM-20689 backend.
-- Matrix Portal, Shared and Custom I²C modes.
+- QMI8658 backend.
+- Matrix Portal, Waveshare ESP32-S3 RGB Matrix, Shared and Custom I²C modes.
 - No third-party accelerometer library required.
 - PlatformIO-ready out-of-tree WLED usermod.
 
@@ -85,8 +86,9 @@ Qualified defaults are **0.55 g** threshold, **0.12 g** hysteresis, **600 ms** s
 | LIS3DH | `0x19`, `0x18` | **Hardware-tested** on Matrix Portal S3 |
 | ICM-20689 | `0x68`, `0x69`; `WHO_AM_I 0x98` | **Hardware-tested** on ESP32-C3 |
 | MPU-6050 | `0x68`, `0x69`; `WHO_AM_I 0x68/0x69` | Implemented; dedicated hardware test pending |
+| QMI8658 | `0x6A`, `0x6B`; `WHO_AM_I 0x05` | **Hardware-tested** on Waveshare ESP32-S3 RGB Matrix |
 
-Both backends use a ±2 g accelerometer range and a 50 Hz sensor cadence. The ICM-20689 backend configures its dedicated accelerometer DLPF register as required.
+LIS3DH and the MPU/ICM backend use a ±2 g profile. The new QMI8658 backend uses the Waveshare example profile of ±4 g, 125 Hz and accelerometer LPF mode 0; the gyroscope remains disabled because MAR only needs gravity direction. The ICM-20689 backend configures its dedicated accelerometer DLPF register as required.
 
 > Some modules sold as GY-521/MPU-6050 may contain a compatible device such as ICM-20689. WLED Info reports the detected chip and `WHO_AM_I` value.
 
@@ -95,6 +97,7 @@ Both backends use a ±2 g accelerometer range and a 50 Hz sensor cadence. The IC
 | Mode | Behavior | Typical use |
 | --- | --- | --- |
 | **Matrix Portal** | Initializes the board-default `Wire` bus and probes the sensor address automatically | Matrix Portal S3 / onboard LIS3DH |
+| **Waveshare ESP32-S3 RGB Matrix** | Initializes `Wire` on SDA `47` / SCL `48` and probes the sensor address automatically | Waveshare board / onboard QMI8658 |
 | **Shared** | Uses WLED's already initialized global `Wire` bus without changing pins, clock or ownership | Multiple I²C devices on the same SDA/SCL pair |
 | **Custom** | Uses configured SDA/SCL pins; explicit or automatic sensor address | Dedicated/custom wiring |
 
@@ -123,7 +126,7 @@ If `Sensor`, I²C mode, SDA/SCL or address are changed but not yet saved, `Auto 
 
 `Invert Rotation:` appears directly below `Sensor Mounting:`. The four detection/timing parameters are hidden until `Advanced:` is enabled. `Allow Rotation` controls which quarter-turn orientations may be accepted; at least one orientation is always retained.
 
-The screenshot shows the current hardware-tested two-column calibration layout. Available I²C modes are `Matrix Portal`, `Shared` and `Custom`.
+The screenshot shows the current hardware-tested two-column calibration layout. The Waveshare preset uses the same UI and appears as `Waveshare ESP32-S3 RGB Matrix` in the I²C mode list.
 
 ## Rectangular matrices
 
@@ -198,6 +201,8 @@ These fields are intended to make sensor wiring and orientation qualification po
 | Runtime disconnect/reconnect recovery | ESP32-C3 + ICM-20689 | **PASS** |
 | Auto Calibrate mounting + direction | ESP32-C3 + ICM-20689, current inverted-face installation | PASS |
 | Two-column calibration UI | ESP32-C3 / WLED desktop UI | PASS |
+| QMI8658 detection and XYZ | Waveshare ESP32-S3 RGB Matrix | **PASS** |
+| QMI8658 automatic rotation / Auto Calibrate | Waveshare ESP32-S3 RGB Matrix | **PASS** |
 | MPU-6050-specific hardware | — | Pending |
 
 ## Known limitations

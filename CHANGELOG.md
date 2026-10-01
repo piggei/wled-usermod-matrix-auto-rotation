@@ -1,5 +1,39 @@
 # Changelog
 
+## 0.1.1-rc.1 - 2026-10-01
+
+Release-candidate promotion of the hardware-qualified QMI8658 / Waveshare development path.
+
+- Promoted package/version metadata from `0.1.1-dev-b002` to `0.1.1-rc.1`.
+- Recorded Waveshare ESP32-S3 RGB Matrix + QMI8658 detection, XYZ sampling, automatic rotation and Auto Calibrate as hardware-qualified RC coverage.
+- Reworked the release checklist and validation wording for the 0.1.1 RC/final gate.
+- Added dedicated RC1 release notes.
+- Retained genuine MPU-6050 hardware qualification and a dedicated rectangular-matrix hardware test as non-blocking follow-up work.
+- No rotation, sensor, calibration, raster, recovery or I²C runtime algorithm changed relative to `0.1.1-dev-b002`.
+
+## 0.1.1-dev-b002 - 2026-10-01
+
+QMI8658 / Waveshare consolidation build after successful real-hardware validation.
+
+- Marked Waveshare ESP32-S3 RGB Matrix + QMI8658 detection, XYZ sampling, automatic rotation and Auto Calibrate as hardware PASS.
+- Updated the compatibility matrix, validation plan and roadmap to reflect the completed hardware qualification.
+- Kept the QMI8658 direct-register backend, Waveshare SDA47/SCL48 preset and all common rotation logic unchanged from b001.
+- Retained genuine MPU-6050 hardware qualification as the only sensor-specific validation gap.
+- Performed a static package/documentation audit; no runtime algorithm changes were required.
+
+## 0.1.1-dev-b001 - 2026-10-01
+
+First post-0.1.0 hardware-expansion build.
+
+- Added a direct-register QMI8658 accelerometer backend with no new third-party runtime dependency.
+- Added QMI8658 address probing at `0x6A` / `0x6B` and identity validation using `WHO_AM_I = 0x05`.
+- Configured the QMI8658 accelerometer for ±4 g, 125 Hz and LPF mode 0; the gyroscope remains disabled.
+- Added `Waveshare ESP32-S3 RGB Matrix` as an I²C preset using onboard SDA GPIO47 and SCL GPIO48.
+- Added QMI8658 addresses to the explicit Custom-I²C address list.
+- Extended WLED Info diagnostics to identify the new preset and QMI8658 device.
+- Updated README, roadmap and validation plan for hardware qualification on the newly available Waveshare board.
+- Existing LIS3DH, MPU/ICM, rotation, calibration, recovery and raster algorithms remain unchanged.
+
 ## 0.1.0 - 2026-09-30
 
 First stable release. Promoted from `0.1.0-rc.1` after the available LIS3DH and ICM-20689 regression matrix, including Shared I²C, Auto Calibrate and runtime disconnect/reconnect recovery, passed on hardware without requiring runtime code changes.

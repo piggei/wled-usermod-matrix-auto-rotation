@@ -4,10 +4,10 @@
 
 The available-hardware RC regression matrix passed and `0.1.0` was promoted to the first stable release without runtime code changes after RC1.
 
-## Device qualification still pending
+## Device qualification status
 
 - Confirm the MPU-family backend on a known genuine MPU-6050 (`WHO_AM_I 0x68/0x69`).
-- Add and qualify the additional accelerometer board when hardware becomes available.
+- QMI8658 on Waveshare ESP32-S3 RGB Matrix (SDA 47 / SCL 48): **hardware-qualified and promoted to 0.1.1-rc.1**.
 
 ## 0.2.0 candidates
 

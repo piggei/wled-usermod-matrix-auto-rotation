@@ -7,17 +7,18 @@
 #include "matrix_auto_rotation_sensor.h"
 
 // WLED Matrix Auto Rotation
-// v0.1.0
+// v0.1.1-rc.1
 //
 // Design rule: the usermod never modifies effect/segment state. Rotation is
 // applied in handleOverlayDraw(), after WLED has composited the final logical
 // raster and immediately before WLED applies its own logical->physical ledmap.
 
 namespace {
-constexpr char MAR_VERSION[] = "0.1.0";
+constexpr char MAR_VERSION[] = "0.1.1-rc.1";
 constexpr uint8_t I2C_MODE_MATRIXPORTAL = 0;
 constexpr uint8_t I2C_MODE_CUSTOM = 1;
 constexpr uint8_t I2C_MODE_SHARED = 4;
+constexpr uint8_t I2C_MODE_WAVESHARE_S3_RGB_MATRIX = 5;
 // Legacy development values retained only for transparent configuration migration.
 constexpr uint8_t I2C_MODE_LEGACY_ESP32_GENERIC = 2;
 constexpr uint8_t I2C_MODE_LEGACY_ESP32S3_DEVKIT = 3;
@@ -114,7 +115,7 @@ private:
       case 0: case 90: case 180: case 270: break;
       default: _sensorMountingDeg = 0; break;
     }
-    if (_sensorType > static_cast<uint8_t>(MARSensorType::MPU6050)) _sensorType = static_cast<uint8_t>(MARSensorType::LIS3DH);
+    if (_sensorType > static_cast<uint8_t>(MARSensorType::QMI8658)) _sensorType = static_cast<uint8_t>(MARSensorType::LIS3DH);
 
     // Preserve compatibility with two legacy I2C mode values that were briefly
     // exposed by development builds; migrate them to equivalent Custom pins.
@@ -126,7 +127,8 @@ private:
       _i2cMode = I2C_MODE_CUSTOM;
       _customSda = 8;
       _customScl = 9;
-    } else if (_i2cMode != I2C_MODE_MATRIXPORTAL && _i2cMode != I2C_MODE_CUSTOM && _i2cMode != I2C_MODE_SHARED) {
+    } else if (_i2cMode != I2C_MODE_MATRIXPORTAL && _i2cMode != I2C_MODE_CUSTOM &&
+               _i2cMode != I2C_MODE_SHARED && _i2cMode != I2C_MODE_WAVESHARE_S3_RGB_MATRIX) {
       _i2cMode = I2C_MODE_MATRIXPORTAL;
     }
 
@@ -192,6 +194,22 @@ private:
       // Do not call begin(), end(), setPins() or setClock() here: the owner
       // of the shared WLED I2C bus remains authoritative for pins and speed.
       return &Wire;
+    }
+
+    if (_i2cMode == I2C_MODE_WAVESHARE_S3_RGB_MATRIX) {
+#if defined(ARDUINO_ARCH_ESP32)
+      // Waveshare ESP32-S3 RGB Matrix onboard I2C bus: SDA=47, SCL=48.
+      // The QMI8658 and other onboard I2C devices share this physical bus.
+      if (!Wire.begin(47, 48, 400000)) {
+        _status = "Waveshare I2C begin failed";
+        return nullptr;
+      }
+      Wire.setClock(400000);
+      return &Wire;
+#else
+      _status = "Waveshare preset requires ESP32";
+      return nullptr;
+#endif
     }
 
 #if defined(ARDUINO_ARCH_ESP32)
@@ -460,9 +478,9 @@ private:
   }
 
   const char *configuredSensorName() const {
-    return _sensorType == static_cast<uint8_t>(MARSensorType::MPU6050)
-      ? "MPU-6050 / ICM-20689"
-      : "LIS3DH";
+    if (_sensorType == static_cast<uint8_t>(MARSensorType::QMI8658)) return "QMI8658";
+    if (_sensorType == static_cast<uint8_t>(MARSensorType::MPU6050)) return "MPU-6050 / ICM-20689";
+    return "LIS3DH";
   }
 
   const char *directionName(int8_t dir) const {
@@ -572,7 +590,11 @@ public:
     status.add(sensorStatusText());
 
     JsonArray busMode = user.createNestedArray(F("MAR I²C mode"));
-    busMode.add(_i2cMode == I2C_MODE_SHARED ? "Shared (WLED Wire)" : (_i2cMode == I2C_MODE_CUSTOM ? "Custom" : "Matrix Portal"));
+    const char *busModeText = "Matrix Portal";
+    if (_i2cMode == I2C_MODE_SHARED) busModeText = "Shared (WLED Wire)";
+    else if (_i2cMode == I2C_MODE_CUSTOM) busModeText = "Custom";
+    else if (_i2cMode == I2C_MODE_WAVESHARE_S3_RGB_MATRIX) busModeText = "Waveshare ESP32-S3 RGB Matrix";
+    busMode.add(busModeText);
 
     char busText[96];
     if (_i2cMode == I2C_MODE_CUSTOM) {
@@ -580,6 +602,8 @@ public:
       else snprintf(busText, sizeof(busText), "SDA %d | SCL %d | address auto", _customSda, _customScl);
     } else if (_i2cMode == I2C_MODE_SHARED) {
       snprintf(busText, sizeof(busText), "owned by WLED | address auto");
+    } else if (_i2cMode == I2C_MODE_WAVESHARE_S3_RGB_MATRIX) {
+      snprintf(busText, sizeof(busText), "SDA 47 | SCL 48 | address auto");
     } else {
       snprintf(busText, sizeof(busText), "board-default Wire | address auto");
     }
@@ -687,7 +711,7 @@ public:
     top["invert-rotation"] = _invertRotation;
 
     // Keep all bus-related controls in one visible I²C section. Only the
-    // Matrix Portal, Shared and Custom modes are exposed in the current UI.
+    // Matrix Portal, Waveshare, Shared and Custom modes are exposed in the current UI.
     JsonObject i2c = top.createNestedObject("i2c");
     i2c["mode"] = _i2cMode;
     i2c["SDA-pin"] = _customSda;
@@ -781,16 +805,16 @@ public:
     settingsScript.print(F("addOption(dd,'0 deg',0);addOption(dd,'90 deg',90);addOption(dd,'180 deg',180);addOption(dd,'270 deg',270);"));
 
     settingsScript.print(F("dd=addDropdown('")); settingsScript.print(FPSTR(_name)); settingsScript.print(F("','sensor');"));
-    settingsScript.print(F("addOption(dd,'LIS3DH',0);addOption(dd,'MPU-6050 / ICM-20689',1);"));
+    settingsScript.print(F("addOption(dd,'LIS3DH',0);addOption(dd,'MPU-6050 / ICM-20689',1);addOption(dd,'QMI8658',2);"));
 
     settingsScript.print(F("dd=addDropdown('")); settingsScript.print(FPSTR(_name)); settingsScript.print(F("','sensor-mounting');"));
     settingsScript.print(F("addOption(dd,'0 deg',0);addOption(dd,'90 deg',90);addOption(dd,'180 deg',180);addOption(dd,'270 deg',270);"));
 
     settingsScript.print(F("dd=addDropdown('")); settingsScript.print(FPSTR(_name)); settingsScript.print(F(":i2c','mode');"));
-    settingsScript.print(F("addOption(dd,'Matrix Portal',0);addOption(dd,'Shared',4);addOption(dd,'Custom',1);"));
+    settingsScript.print(F("addOption(dd,'Matrix Portal',0);addOption(dd,'Waveshare ESP32-S3 RGB Matrix',5);addOption(dd,'Shared',4);addOption(dd,'Custom',1);"));
 
     settingsScript.print(F("dd=addDropdown('")); settingsScript.print(FPSTR(_name)); settingsScript.print(F(":i2c','address');"));
-    settingsScript.print(F("addOption(dd,'Auto',0);addOption(dd,'0x18',24);addOption(dd,'0x19',25);addOption(dd,'0x68',104);addOption(dd,'0x69',105);"));
+    settingsScript.print(F("addOption(dd,'Auto',0);addOption(dd,'0x18',24);addOption(dd,'0x19',25);addOption(dd,'0x68',104);addOption(dd,'0x69',105);addOption(dd,'0x6A',106);addOption(dd,'0x6B',107);"));
 
     settingsScript.print(F("addInfo('")); settingsScript.print(FPSTR(_name)); settingsScript.print(F(":advanced-settings:threshold-g',1,'Minimum dominant X/Y gravity. Default: 0.55 g.');"));
     settingsScript.print(F("addInfo('")); settingsScript.print(FPSTR(_name)); settingsScript.print(F(":advanced-settings:hysteresis-g',1,'Diagonal X/Y hysteresis. Default: 0.12 g.');"));

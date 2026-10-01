@@ -5,7 +5,8 @@
 
 enum class MARSensorType : uint8_t {
   LIS3DH = 0,
-  MPU6050 = 1
+  MPU6050 = 1,
+  QMI8658 = 2
 };
 
 enum class MARSensorInitError : uint8_t {
@@ -40,8 +41,10 @@ private:
   bool probeAddress(uint8_t address);
   bool initLIS3DH();
   bool initMPU6050();
+  bool initQMI8658();
   bool readLIS3DH(MARAccelSample &sample);
   bool readMPU6050(MARAccelSample &sample);
+  bool readQMI8658(MARAccelSample &sample);
   bool readRegister(uint8_t reg, uint8_t &value);
   bool readRegisters(uint8_t reg, uint8_t *data, size_t len, bool lisAutoIncrement = false);
   bool writeRegister(uint8_t reg, uint8_t value);
