@@ -1,6 +1,6 @@
-# v0.1.2-dev-b006 validation plan
+# v0.1.2 validation record
 
-`0.1.2-dev-b006` is a documentation/qualification consolidation of the hardware-verified `0.1.2-dev-b005` runtime; no functional runtime behavior changes except the version string. The underlying 0.1.2 hardening keeps the PinManager reservation fix, the explicit board-shared Waveshare SDA47/SCL48 contract, safe MAR-owned bus teardown, and non-owning Shared I²C behavior. Existing sensor, calibration, recovery and raster behavior remain the regression baseline.
+`0.1.2` is promoted from the hardware-qualified `0.1.2-rc.1` release candidate; no functional runtime behavior changes except the version string. RC1 smoke tests passed on ESP32-C3 / ICM-20689 and Waveshare ESP32-S3 RGB Matrix / QMI8658. The underlying 0.1.2 hardening keeps the PinManager reservation fix, the explicit board-shared Waveshare SDA47/SCL48 contract, safe MAR-owned bus teardown, and non-owning Shared I²C behavior. Existing sensor, calibration, recovery and raster behavior remain the regression baseline.
 
 Hardware validated for the 0.1.0 release:
 

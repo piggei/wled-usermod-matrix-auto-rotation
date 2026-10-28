@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.1.2 - 2026-10-28
+
+Stable release promoted from `0.1.2-rc.1` after release-candidate smoke tests passed on both qualified hardware paths. Runtime behavior is unchanged from RC1 except for the version string.
+
+- Finalize the I2C lifecycle hardening introduced during the 0.1.2 cycle.
+- Preserve atomic PinManager reservation/rollback for MAR-owned Custom buses.
+- Preserve safe single-controller teardown: MAR ends an owned global `Wire` before releasing its pins, and Shared mode does not probe an ended MAR-owned bus.
+- Preserve the Waveshare SDA47/SCL48 board-shared contract so MAR never claims or reinitializes the onboard QMI8658/SHTC3 bus.
+- Record external review confirmation that both previous Important findings are addressed in source and that no new Important finding was found within the inspected scope.
+- Record RC1 smoke-test PASS on ESP32-C3 / ICM-20689 and Waveshare ESP32-S3 RGB Matrix / QMI8658.
+- Keep remaining lifecycle coverage items and the short sensor-initialization `delay()` cleanup as documented non-blocking follow-up work.
+
+## 0.1.2-rc.1 - 2026-10-28
+
+- Promote the hardware-qualified `0.1.2-dev-b006` baseline to release candidate without functional runtime changes other than the version string.
+- Preserve the validated I2C lifecycle hardening for MAR-owned Custom buses, Shared-mode non-ownership, and the Waveshare board-shared SDA47/SCL48 contract.
+- Record external review confirmation that both previous Important findings are addressed in source and that no new Important finding was found within the inspected scope.
+- Keep remaining coverage limits explicit: pin-conflict rejection, failed-start rollback, arbitrary Custom pin reassignment, MatrixPortal ownership/reuse, Auto Rotation-only disable, delayed external board-bus owner startup, genuine MPU-6050 hardware qualification, and real rectangular-matrix guard testing.
+- Keep the short sensor-initialization `delay()` cleanup as lower-priority future work.
+
 ## 0.1.2-dev-b006
 
 - Documentation/qualification consolidation of the hardware-verified b005 runtime; no functional runtime changes other than the version string.

@@ -2,7 +2,7 @@
 
 ## Current baseline
 
-`0.1.2-dev-b006` is a documentation/qualification consolidation of the hardware-verified `0.1.2-dev-b005` runtime. Runtime behavior is unchanged except for the version string. Stable release promotion is not yet declared.
+`0.1.2` is promoted from the hardware-qualified `0.1.2-rc.1` release candidate. Runtime behavior is unchanged except for the version string. RC1 smoke tests passed on ESP32-C3 / ICM-20689 and Waveshare ESP32-S3 RGB Matrix / QMI8658.
 
 ## External-review findings
 
@@ -23,7 +23,7 @@
 - [x] ESP32-C3: Shared unavailable -> Custom 8/9 reacquires the bus and returns ICM-20689 to ready.
 - [x] No new panic/reboot observed during the qualified b005 transition round-trip.
 
-## Pending regression coverage before final promotion
+## Non-blocking follow-up coverage
 
 - [ ] Pin-conflict rejection against an already allocated Custom pair.
 - [ ] Failed bus-start rollback leaves no stale PinManager reservations.
@@ -39,3 +39,7 @@
 - [x] TODO preserves remaining work and lower-priority delay cleanup.
 - [x] 0.1.1 historical release checklist remains untouched.
 - [x] b006 runtime diff against b005 is version-string only.
+- [x] rc.1 runtime diff against b006 is version-string only.
+- [x] Final 0.1.2 runtime diff against rc.1 is version-string only.
+- [x] RC1 smoke test passed on ESP32-C3 / ICM-20689 Custom SDA8/SCL9.
+- [x] RC1 smoke test passed on Waveshare ESP32-S3 RGB Matrix / QMI8658 shared board I2C.

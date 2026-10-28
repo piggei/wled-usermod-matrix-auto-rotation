@@ -1,11 +1,11 @@
 # WLED Matrix Auto Rotation
 
-**Version:** `0.1.2-dev-b006`  
-**Status:** development bugfix build based on the stable 0.1.1 release; hardens I²C ownership and lifecycle handling
+**Version:** `0.1.2`  
+**Status:** stable release
 
 A standalone WLED usermod that automatically rotates the **final 2D matrix raster** according to an accelerometer, without changing effect or segment state.
 
-`0.1.2-dev-b006` is a documentation/qualification consolidation of the hardware-verified `0.1.2-dev-b005` runtime; there are no functional runtime changes other than the version string. The qualified runtime hardens the complete I²C lifecycle after real-hardware testing exposed both an initialization-order race on the Waveshare board and a single-controller Custom-to-Shared transition hazard on ESP32-C3. The Waveshare SDA47/SCL48 bus is treated as board-shared by contract, MAR-owned buses release the controller before GPIO, and Shared I²C remains non-owning.
+`0.1.2` is promoted from the hardware-qualified `0.1.2-rc.1` release candidate with no functional runtime changes other than the version string. The RC1 smoke tests passed on both ESP32-C3 / ICM-20689 and Waveshare ESP32-S3 RGB Matrix / QMI8658. The qualified runtime hardens the complete I²C lifecycle after real-hardware testing exposed both an initialization-order race on the Waveshare board and a single-controller Custom-to-Shared transition hazard on ESP32-C3. The Waveshare SDA47/SCL48 bus is treated as board-shared by contract, MAR-owned buses release the controller before GPIO, and Shared I²C remains non-owning.
 
 <p align="center">
   <img src="docs/images/auto-rotation-demo.gif" alt="WLED Matrix Auto Rotation demo" width="448">
