@@ -1,6 +1,6 @@
 # WLED Matrix Auto Rotation v0.1.1-rc.1
 
-`0.1.1-rc.1` is the release-candidate promotion of the hardware-qualified 0.1.1 development path.
+`0.1.1-rc.1` is the release-candidate promotion of the hardware-tested 0.1.1 development path.
 
 ## New in 0.1.1
 
@@ -11,7 +11,7 @@
 - Added QMI8658 addresses to Custom-I²C address selection.
 - Extended diagnostics for the Waveshare preset and QMI8658 device identity.
 
-## Hardware validation
+## Hardware testing
 
 The Waveshare ESP32-S3 RGB Matrix + onboard QMI8658 path has been verified on real hardware, including:
 
@@ -21,7 +21,7 @@ The Waveshare ESP32-S3 RGB Matrix + onboard QMI8658 path has been verified on re
 - Sensor Mounting / Invert Rotation behavior;
 - Auto Calibrate.
 
-Existing 0.1.0-qualified LIS3DH and ICM-20689 paths remain the regression baseline.
+Existing 0.1.0-tested LIS3DH and ICM-20689 paths remain the regression baseline.
 
 ## RC policy
 

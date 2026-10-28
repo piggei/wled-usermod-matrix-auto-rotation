@@ -1,8 +1,8 @@
-# v0.1.2 validation record
+# v0.1.2 test record
 
-`0.1.2` is promoted from the hardware-qualified `0.1.2-rc.1` release candidate; no functional runtime behavior changes except the version string. RC1 smoke tests passed on ESP32-C3 / ICM-20689 and Waveshare ESP32-S3 RGB Matrix / QMI8658. The underlying 0.1.2 hardening keeps the PinManager reservation fix, the explicit board-shared Waveshare SDA47/SCL48 contract, safe MAR-owned bus teardown, and non-owning Shared I²C behavior. Existing sensor, calibration, recovery and raster behavior remain the regression baseline.
+`0.1.2` is promoted from the hardware-tested `0.1.2-rc.1` release candidate; no functional runtime behavior changes except the version string. RC1 smoke tests passed on ESP32-C3 / ICM-20689 and Waveshare ESP32-S3 RGB Matrix / QMI8658. The underlying 0.1.2 hardening keeps the PinManager reservation fix, the explicit board-shared Waveshare SDA47/SCL48 contract, safe MAR-owned bus teardown, and non-owning Shared I²C behavior. Existing sensor, calibration, recovery and raster behavior remain the regression baseline.
 
-Hardware validated for the 0.1.0 release:
+Hardware tested for the 0.1.0 release:
 
 - LIS3DH on Matrix Portal S3;
 - automatic 0° / 90° / 180° / 270° rotation;
@@ -47,7 +47,7 @@ The checks below are the release-regression matrix.
 - **ESP32-C3 / ICM-20689:** Custom SDA8/SCL9 reported `MAR owned` and `sensor ready`; `Custom -> Shared` preserved uptime and `bootReset=software code=3`, then correctly reported `shared I2C waiting for WLED Wire`; `Shared -> Custom 8/9` reacquired ownership and returned ICM-20689 `0x68 / ID 0x98` to `sensor ready` without reboot.
 - The earlier b004 `Custom -> Shared` panic is therefore considered reproduced, isolated, and fixed by b005.
 
-Untested items remain unchecked above and must not be treated as hardware-qualified merely because the code path exists.
+Untested items remain unchecked above and must not be treated as hardware-tested merely because the code path exists.
 
 ## 1. Configuration UI
 
@@ -117,7 +117,7 @@ Verify that enabling/disabling `Invert Rotation` does not alter `Setup Rotation`
 
 ## 5. Detection stability
 
-Using qualified defaults (0.55 g / 0.12 g / 600 ms / 100 ms):
+Using tested defaults (0.55 g / 0.12 g / 600 ms / 100 ms):
 
 1. Hold near a 45° diagonal: no X/Y chatter.
 2. Cross into another orientation for less than 600 ms: no accepted rotation.
@@ -128,7 +128,7 @@ Using qualified defaults (0.55 g / 0.12 g / 600 ms / 100 ms):
 
 ## 6. ICM-20689 on ESP32-C3
 
-Known-qualified device:
+Device used for this hardware test:
 
 - address `0x68`;
 - `WHO_AM_I = 0x98`.
@@ -171,7 +171,7 @@ On single-controller ESP32 targets, Custom rebinds the sole controller; use Shar
 
 ## 9. Runtime disconnect/reconnect
 
-Hardware status: **PASS** (qualified in 0.1.0 and carried forward unchanged into 0.1.1).
+Hardware status: **PASS** (tested in 0.1.0 and carried forward unchanged into 0.1.1).
 
 Regression procedure:
 
@@ -220,14 +220,14 @@ Verify the 0.1.1 diagnostic set:
 
 A failure before `sensor.begin()` must never be displayed as sensor `OK`.
 
-## 12. Remaining device qualification
+## 12. Remaining device testing
 
-A confirmed MPU-6050 device still requires a dedicated hardware pass. Expected IDs are `0x68`/`0x69`. This is a device-qualification gap, not a blocker for the already-qualified LIS3DH and ICM-20689 targets.
+A confirmed MPU-6050 device still requires a dedicated hardware pass. Expected IDs are `0x68`/`0x69`. This is a hardware-test gap, not a blocker for the already-tested LIS3DH and ICM-20689 targets.
 
 
 ## 13. Waveshare ESP32-S3 RGB Matrix + QMI8658
 
-Hardware-qualified stable-release target for `0.1.1`.
+Hardware test coverage for the `0.1.1` stable release.
 
 Board preset:
 
@@ -254,7 +254,7 @@ Hardware result:
 - Waveshare SDA47/SCL48 preset: **PASS**.
 - No changes were required to the common orientation engine or raster-rotation path.
 
-Final Waveshare release qualification snapshot:
+Final Waveshare hardware test snapshot:
 
 - WLED: `17.0.0-devV5`;
 - matrix: `64x64` HUB75;
@@ -266,7 +266,7 @@ Final Waveshare release qualification snapshot:
 
 ## ESP32-C3 single-controller transition regression
 
-- Start in Custom mode on a MAR-owned bus (qualified case: SDA 8 / SCL 9 with ICM-20689).
+- Start in Custom mode on a MAR-owned bus (tested case: SDA 8 / SCL 9 with ICM-20689).
 - Confirm `MAR owned`, sensor ready, and zero read errors.
 - Switch directly to Shared without rebooting.
 - If no WLED/global Shared bus exists, expected result is `shared I2C waiting for WLED Wire`, sensor not ready, no panic/reboot, and no MAR-owned pins remaining.

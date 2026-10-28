@@ -5,7 +5,7 @@
 
 A standalone WLED usermod that automatically rotates the **final 2D matrix raster** according to an accelerometer, without changing effect or segment state.
 
-`0.1.2` is promoted from the hardware-qualified `0.1.2-rc.1` release candidate with no functional runtime changes other than the version string. The RC1 smoke tests passed on both ESP32-C3 / ICM-20689 and Waveshare ESP32-S3 RGB Matrix / QMI8658. The qualified runtime hardens the complete I²C lifecycle after real-hardware testing exposed both an initialization-order race on the Waveshare board and a single-controller Custom-to-Shared transition hazard on ESP32-C3. The Waveshare SDA47/SCL48 bus is treated as board-shared by contract, MAR-owned buses release the controller before GPIO, and Shared I²C remains non-owning.
+`0.1.2` is promoted from the `0.1.2-rc.1` release candidate with no functional runtime changes other than the version string. The RC1 smoke tests passed on both ESP32-C3 / ICM-20689 and Waveshare ESP32-S3 RGB Matrix / QMI8658. This release improves I²C ownership and lifecycle handling for the scenarios described below, after real-hardware testing exposed both an initialization-order race on the Waveshare board and a single-controller Custom-to-Shared transition hazard on ESP32-C3. The Waveshare SDA47/SCL48 bus is treated as board-shared by contract, MAR-owned buses release the controller before GPIO, and Shared I²C remains non-owning.
 
 <p align="center">
   <img src="docs/images/auto-rotation-demo.gif" alt="WLED Matrix Auto Rotation demo" width="448">
@@ -70,7 +70,7 @@ autoRotation = -autoRotation  (mod 360)
 
 This keeps 0° and 180° unchanged while swapping 90° and 270°. It is intended for installations where the accelerometer board is fixed to the opposite face (for example, back-to-back with the enclosure rather than back-to-back with the LED matrix). `Setup Rotation` remains the installation reference in both cases.
 
-The Matrix Portal axis convention validated on hardware is:
+The Matrix Portal axis convention tested on hardware is:
 
 | Physical panel orientation | Gravity direction | Auto rotation |
 | --- | --- | --- |
@@ -79,7 +79,7 @@ The Matrix Portal axis convention validated on hardware is:
 | 180° | -Y | 180° |
 | 270° clockwise | -X | 270° |
 
-Qualified defaults are **0.55 g** threshold, **0.12 g** hysteresis, **600 ms** stable time and **100 ms** polling. If neither X nor Y dominates sufficiently, the last stable orientation is preserved; Z is not used to invent an orientation while the panel is nearly flat.
+Tested defaults are **0.55 g** threshold, **0.12 g** hysteresis, **600 ms** stable time and **100 ms** polling. If neither X nor Y dominates sufficiently, the last stable orientation is preserved; Z is not used to invent an orientation while the panel is nearly flat.
 
 ## Supported sensors
 
@@ -188,9 +188,9 @@ The usermod reports:
 - allowed automatic orientations;
 - matrix geometry, square/rectangular capability and blocked-quarter-turn diagnostics.
 
-These fields are intended to make sensor wiring and orientation qualification possible without adding debug code.
+These fields are intended to make sensor wiring and orientation troubleshooting possible without adding debug code.
 
-## Hardware validation matrix
+## Hardware test matrix
 
 | Function | Hardware | Result |
 | --- | --- | --- |
@@ -211,15 +211,15 @@ These fields are intended to make sensor wiring and orientation qualification po
 | Single-controller Custom → Shared → Custom lifecycle | ESP32-C3 + ICM-20689, Custom SDA8/SCL9 | **PASS** |
 | MPU-6050-specific hardware | — | Pending |
 
-The v0.1.1 qualification run on the Waveshare target used WLED 17.0.0-devV5 with a 64×64 HUB75 matrix. The onboard QMI8658 was detected at `0x6B` with `WHO_AM_I = 0x05`; the captured runtime snapshot reported 1146 successful samples, 0 read errors and no spurious disconnect/reconnect events.
+The v0.1.1 hardware test on the Waveshare target used WLED 17.0.0-devV5 with a 64×64 HUB75 matrix. The onboard QMI8658 was detected at `0x6B` with `WHO_AM_I = 0x05`; the captured runtime snapshot reported 1146 successful samples, 0 read errors and no spurious disconnect/reconnect events.
 
-The v0.1.2 lifecycle qualification additionally verified the Waveshare board-shared bus through `Custom 47/48 -> Waveshare preset -> Shared -> Waveshare preset`, with QMI8658 and SHTC3 remaining healthy and zero MAR read errors during the captured passes. On ESP32-C3, the MAR-owned single-controller path was verified with ICM-20689 on Custom SDA8/SCL9 through `Custom -> Shared unavailable -> Custom`; uptime continued across both transitions, no new panic/reboot occurred, and the sensor returned to `ready` after reacquiring the owned bus.
+The v0.1.2 lifecycle tests additionally verified the Waveshare board-shared bus through `Custom 47/48 -> Waveshare preset -> Shared -> Waveshare preset`, with QMI8658 and SHTC3 remaining healthy and zero MAR read errors during the captured passes. On ESP32-C3, the MAR-owned single-controller path was verified with ICM-20689 on Custom SDA8/SCL9 through `Custom -> Shared unavailable -> Custom`; uptime continued across both transitions, no new panic/reboot occurred, and the sensor returned to `ready` after reacquiring the owned bus.
 
 ## Known limitations
 
 - Per-pixel WLED CCT metadata is not rotated. This does not affect the tested RGB matrix targets.
 - Orientation is derived from X/Y gravity only; Z is intentionally ignored for orientation selection.
-- MPU-6050 support is implemented but has not yet been qualified on a confirmed MPU-6050 device.
+- MPU-6050 support is implemented but has not yet been tested on a confirmed MPU-6050 device.
 - 90°/270° output on rectangular matrices is intentionally blocked because MAR does not alter WLED matrix geometry.
 
 ## Origin of the orientation algorithm

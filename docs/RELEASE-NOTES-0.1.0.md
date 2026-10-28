@@ -16,9 +16,9 @@ First stable release of the WLED Matrix Auto Rotation usermod.
 - Explicit rectangular-matrix protection: final 90°/270° requests are blocked without crop, resize or WLED geometry mutation.
 - PlatformIO-ready out-of-tree integration through WLED `custom_usermods`.
 
-## Hardware qualification
+## Hardware testing
 
-Validated on:
+Tested on:
 
 - Matrix Portal S3 + onboard LIS3DH;
 - ESP32-C3 + ICM-20689;
@@ -26,9 +26,9 @@ Validated on:
 - runtime sensor disconnect/reconnect recovery;
 - opposite-face sensor installation using `Invert Rotation` and `Auto Calibrate`.
 
-## Known qualification gaps
+## Known testing gaps
 
-- Dedicated hardware validation on a confirmed genuine MPU-6050 remains pending.
+- Dedicated hardware testing on a confirmed genuine MPU-6050 remains pending.
 - Rectangular-matrix quarter-turn blocking is statically verified; a dedicated hardware regression remains desirable when suitable hardware is available.
 
 See `README.md`, `docs/TEST-PLAN.md` and `CHANGELOG.md` for full details.

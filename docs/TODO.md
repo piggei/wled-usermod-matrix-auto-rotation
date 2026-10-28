@@ -2,13 +2,13 @@
 
 ## Stable release status
 
-`0.1.1` is the current stable release. It carries forward the qualified 0.1.0 feature set and adds hardware-qualified QMI8658 support plus the Waveshare ESP32-S3 RGB Matrix I²C preset.
+`0.1.2` is the current stable release. It carries forward the 0.1.1 feature set and adds the I²C ownership and lifecycle improvements tested on the Waveshare ESP32-S3 RGB Matrix and ESP32-C3 configurations documented in the test record.
 
-## Device qualification status
+## Device testing status
 
 - Confirm the MPU-family backend on a known genuine MPU-6050 (`WHO_AM_I 0x68/0x69`).
-- QMI8658 on Waveshare ESP32-S3 RGB Matrix (SDA 47 / SCL 48): **hardware-qualified and released in 0.1.1**.
-- v0.1.2 I²C lifecycle hardening: **hardware-qualified in dev-b005** for Waveshare board-shared 47/48 transitions and ESP32-C3 MAR-owned Custom 8/9 -> Shared -> Custom round-trip; release promotion still pending.
+- QMI8658 on Waveshare ESP32-S3 RGB Matrix (SDA 47 / SCL 48): **hardware-tested and released in 0.1.1**.
+- v0.1.2 I²C ownership/lifecycle changes: **tested on real hardware** for Waveshare board-shared 47/48 transitions and the ESP32-C3 MAR-owned Custom 8/9 -> Shared -> Custom round-trip; released in v0.1.2.
 
 ## 0.2.0 candidates
 

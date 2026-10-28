@@ -2,7 +2,7 @@
 
 ## 0.1.2 - 2026-10-28
 
-Stable release promoted from `0.1.2-rc.1` after release-candidate smoke tests passed on both qualified hardware paths. Runtime behavior is unchanged from RC1 except for the version string.
+Stable release promoted from `0.1.2-rc.1` after release-candidate smoke tests passed on both tested hardware paths. Runtime behavior is unchanged from RC1 except for the version string.
 
 - Finalize the I2C lifecycle hardening introduced during the 0.1.2 cycle.
 - Preserve atomic PinManager reservation/rollback for MAR-owned Custom buses.
@@ -14,15 +14,15 @@ Stable release promoted from `0.1.2-rc.1` after release-candidate smoke tests pa
 
 ## 0.1.2-rc.1 - 2026-10-28
 
-- Promote the hardware-qualified `0.1.2-dev-b006` baseline to release candidate without functional runtime changes other than the version string.
-- Preserve the validated I2C lifecycle hardening for MAR-owned Custom buses, Shared-mode non-ownership, and the Waveshare board-shared SDA47/SCL48 contract.
+- Promote the hardware-tested `0.1.2-dev-b006` baseline to release candidate without functional runtime changes other than the version string.
+- Preserve the tested I2C lifecycle changes for MAR-owned Custom buses, Shared-mode non-ownership, and the Waveshare board-shared SDA47/SCL48 contract.
 - Record external review confirmation that both previous Important findings are addressed in source and that no new Important finding was found within the inspected scope.
-- Keep remaining coverage limits explicit: pin-conflict rejection, failed-start rollback, arbitrary Custom pin reassignment, MatrixPortal ownership/reuse, Auto Rotation-only disable, delayed external board-bus owner startup, genuine MPU-6050 hardware qualification, and real rectangular-matrix guard testing.
+- Keep remaining coverage limits explicit: pin-conflict rejection, failed-start rollback, arbitrary Custom pin reassignment, MatrixPortal ownership/reuse, Auto Rotation-only disable, delayed external board-bus owner startup, genuine MPU-6050 hardware testing, and real rectangular-matrix guard testing.
 - Keep the short sensor-initialization `delay()` cleanup as lower-priority future work.
 
 ## 0.1.2-dev-b006
 
-- Documentation/qualification consolidation of the hardware-verified b005 runtime; no functional runtime changes other than the version string.
+- Documentation and test-record consolidation of the b005 runtime tested on hardware; no functional runtime changes other than the version string.
 - Record Waveshare ESP32-S3 RGB Matrix lifecycle PASS for `Custom 47/48 -> Waveshare preset -> Shared -> Waveshare preset`, with QMI8658 and SHTC3 remaining healthy on the board-shared bus.
 - Record ESP32-C3 single-controller lifecycle PASS for ICM-20689 on Custom SDA8/SCL9 through `Custom -> Shared unavailable -> Custom`, with continuous uptime and no new panic/reboot.
 - Mark only actually executed lifecycle cases as PASS; conflict rejection, failed-bus-start rollback, arbitrary pin reassignment and MatrixPortal ownership regressions remain pending.
@@ -78,30 +78,30 @@ Stable release promoted from `0.1.1-rc.1` after the Waveshare ESP32-S3 RGB Matri
 - Finalized package/version metadata as `0.1.1`.
 - Confirmed the Waveshare ESP32-S3 RGB Matrix preset on SDA47/SCL48 with the onboard QMI8658 detected at `0x6B` / `WHO_AM_I 0x05`.
 - Confirmed automatic rotation and Auto Calibrate on a 64×64 HUB75 matrix.
-- Recorded a qualification snapshot of 1146 successful QMI8658 reads with 0 errors and no spurious disconnect/reconnect events.
+- Recorded a testing snapshot of 1146 successful QMI8658 reads with 0 errors and no spurious disconnect/reconnect events.
 - Completed documentation/version consistency audit and promoted RC wording to stable-release wording.
-- Kept confirmed genuine MPU-6050 hardware qualification and dedicated rectangular-matrix hardware testing as non-blocking follow-up work.
+- Kept confirmed genuine MPU-6050 hardware testing and dedicated rectangular-matrix hardware testing as non-blocking follow-up work.
 - Runtime rotation, sensor, calibration, raster, recovery and I²C algorithms are unchanged from `0.1.1-rc.1`.
 
 ## 0.1.1-rc.1 - 2026-10-01
 
-Release-candidate promotion of the hardware-qualified QMI8658 / Waveshare development path.
+Release-candidate promotion of the hardware-tested QMI8658 / Waveshare development path.
 
 - Promoted package/version metadata from `0.1.1-dev-b002` to `0.1.1-rc.1`.
-- Recorded Waveshare ESP32-S3 RGB Matrix + QMI8658 detection, XYZ sampling, automatic rotation and Auto Calibrate as hardware-qualified RC coverage.
+- Recorded Waveshare ESP32-S3 RGB Matrix + QMI8658 detection, XYZ sampling, automatic rotation and Auto Calibrate as hardware-tested RC coverage.
 - Reworked the release checklist and validation wording for the 0.1.1 RC/final gate.
 - Added dedicated RC1 release notes.
-- Retained genuine MPU-6050 hardware qualification and a dedicated rectangular-matrix hardware test as non-blocking follow-up work.
+- Retained genuine MPU-6050 hardware testing and a dedicated rectangular-matrix hardware test as non-blocking follow-up work.
 - No rotation, sensor, calibration, raster, recovery or I²C runtime algorithm changed relative to `0.1.1-dev-b002`.
 
 ## 0.1.1-dev-b002 - 2026-10-01
 
-QMI8658 / Waveshare consolidation build after successful real-hardware validation.
+QMI8658 / Waveshare consolidation build after successful real-hardware testing.
 
 - Marked Waveshare ESP32-S3 RGB Matrix + QMI8658 detection, XYZ sampling, automatic rotation and Auto Calibrate as hardware PASS.
-- Updated the compatibility matrix, validation plan and roadmap to reflect the completed hardware qualification.
+- Updated the compatibility matrix, test plan and roadmap to reflect the completed hardware testing.
 - Kept the QMI8658 direct-register backend, Waveshare SDA47/SCL48 preset and all common rotation logic unchanged from b001.
-- Retained genuine MPU-6050 hardware qualification as the only sensor-specific validation gap.
+- Retained genuine MPU-6050 hardware testing as the only sensor-specific hardware-test gap.
 - Performed a static package/documentation audit; no runtime algorithm changes were required.
 
 ## 0.1.1-dev-b001 - 2026-10-01
@@ -114,7 +114,7 @@ First post-0.1.0 hardware-expansion build.
 - Added `Waveshare ESP32-S3 RGB Matrix` as an I²C preset using onboard SDA GPIO47 and SCL GPIO48.
 - Added QMI8658 addresses to the explicit Custom-I²C address list.
 - Extended WLED Info diagnostics to identify the new preset and QMI8658 device.
-- Updated README, roadmap and validation plan for hardware qualification on the newly available Waveshare board.
+- Updated README, roadmap and test plan for hardware testing on the newly available Waveshare board.
 - Existing LIS3DH, MPU/ICM, rotation, calibration, recovery and raster algorithms remain unchanged.
 
 ## 0.1.0 - 2026-09-30
@@ -123,17 +123,17 @@ First stable release. Promoted from `0.1.0-rc.1` after the available LIS3DH and 
 
 - Finalized package/version metadata as `0.1.0`.
 - Marked the README as the stable release.
-- Recorded the completed RC regression and disconnect/reconnect qualification.
-- Kept MPU-6050-specific hardware qualification and dedicated rectangular-matrix hardware testing as non-blocking follow-up work.
+- Recorded the completed RC regression and disconnect/reconnect testing.
+- Kept MPU-6050-specific hardware testing and dedicated rectangular-matrix hardware testing as non-blocking follow-up work.
 - Runtime rotation, sensor, calibration, raster, recovery and I²C algorithms are unchanged from `0.1.0-rc.1`.
 
 ## 0.1.0-rc.1 - 2026-09-30
 
-Release-candidate consolidation derived from the hardware-qualified b016 path.
+Release-candidate consolidation derived from the hardware-tested b016 path.
 
 - Promoted the package/version metadata from development build b016 to `0.1.0-rc.1`.
 - Recorded runtime disconnect/reconnect recovery as hardware PASS.
-- Reworked the validation plan into an RC regression matrix and removed superseded development-build wording.
+- Reworked the test plan into an RC regression matrix and removed superseded development-build wording.
 - Cleaned the pre-release TODO list around actual remaining RC/final-release gates.
 - Clarified Custom-I²C comments without changing its runtime behavior.
 - Retained the complete development changelog for traceability.
@@ -141,7 +141,7 @@ Release-candidate consolidation derived from the hardware-qualified b016 path.
 
 ## 0.1.0-dev-b016
 
-- Consolidated the README around the current hardware-qualified UI and added the official auto-rotation demo GIF plus the latest configuration screenshot.
+- Consolidated the README around the current UI and hardware-tested behavior and added the official auto-rotation demo GIF plus the latest configuration screenshot.
 - Expanded WLED Info diagnostics with runtime state, I²C configuration, reconnect countdown, filter values and allowed orientations.
 - Split final rotation diagnostics into `requested` and `applied` values.
 - Hardened rectangular-matrix behavior: composed final 90°/270° requests are explicitly blocked and deterministically fall back to the unrotated raster, without crop, resize or WLED geometry mutation.
@@ -155,7 +155,7 @@ Release-candidate consolidation derived from the hardware-qualified b016 path.
 - Moved the `Auto Calibrate` button to a right-hand column, vertically centered across those two sensor-installation controls.
 - Kept the WLED-style orange calibration instructions below the full two-column block.
 - Added a narrow-screen fallback that stacks the button below the two sensor-installation rows.
-- Recorded the b014 Auto Calibrate hardware pass on the current ESP32-C3 + ICM-20689 installation; runtime disconnect/reconnect qualification remains pending.
+- Recorded the b014 Auto Calibrate hardware pass on the current ESP32-C3 + ICM-20689 installation; runtime disconnect/reconnect testing remains pending.
 
 ## 0.1.0-dev-b014
 
@@ -203,15 +203,15 @@ Rotation-direction inversion build.
 
 ## 0.1.0-dev b010
 
-Consolidation build after hardware qualification of Shared I²C on ESP32-C3.
+Consolidation build after hardware testing of Shared I²C on ESP32-C3.
 
 - froze the b009 rotation and Shared-I²C behavior as the functional baseline;
 - removed the unused Shared-bus sensor error enum/path left from the b008 experiment;
 - cleaned stale build-number and experimental comments from the code;
 - rewrote README around current behavior instead of development history;
-- added a concise hardware-validation matrix;
-- documented LIS3DH and ICM-20689 as hardware-tested and MPU-6050 as implemented/pending dedicated hardware qualification;
-- rewrote the test plan as a current regression/qualification checklist;
+- added a concise hardware test matrix;
+- documented LIS3DH and ICM-20689 as hardware-tested and MPU-6050 as implemented/pending dedicated hardware testing;
+- rewrote the test plan as a current regression test checklist;
 - made PlatformIO examples use the stable repository directory name rather than a build-specific path.
 
 ## 0.1.0-dev-b009
@@ -220,7 +220,7 @@ Consolidation build after hardware qualification of Shared I²C on ESP32-C3.
 - Shared mode now uses WLED's already-initialized global `Wire` object and never reinitializes, ends, repins, or retimes the bus.
 - Removed the experimental direct ESP32 HAL I²C path introduced in b008.
 - Fixed a latent b008 read-path issue where Shared mode could not sample acceleration because no `TwoWire` pointer was present.
-- Intended validation case: ESP32-C3 with PAJ7620 at `0x73` and ICM-20689 at `0x68` on the same WLED I²C bus.
+- Intended test case: ESP32-C3 with PAJ7620 at `0x73` and ICM-20689 at `0x68` on the same WLED I²C bus.
 
 ## 0.1.0-dev b008 - 2026-09-21
 
@@ -233,7 +233,7 @@ Shared-I²C coexistence build; rotation/classifier behavior is unchanged.
 - Added `shared I2C bus not ready` diagnostic.
 - Added `MAR I²C mode` to WLED Info.
 - Kept legacy I²C mode values 2/3 reserved for migration; Shared uses value 4 so existing configurations are not reinterpreted.
-- Documented the ESP32-C3 PAJ7620 (`0x73`) + ICM-20689 (`0x68`) shared-bus qualification procedure.
+- Documented the ESP32-C3 PAJ7620 (`0x73`) + ICM-20689 (`0x68`) shared-bus testing procedure.
 
 ## 0.1.0-dev b007 - 2026-09-21
 
@@ -244,7 +244,7 @@ MPU-family compatibility build. Rotation/raster logic is unchanged.
 - Added ICM-20689 accelerometer DLPF setup/read-back through `ACCEL_CONFIG2` (`0x1D`).
 - WLED Info now reports the detected model (`MPU-6050` or `ICM-20689`) instead of only the configured family.
 - Renamed the sensor UI option to `MPU-6050 / ICM-20689`.
-- Documented the ESP32-C3 qualification case using Custom I²C on GPIO6/GPIO7.
+- Documented the ESP32-C3 testing case using Custom I²C on GPIO6/GPIO7.
 
 ## 0.1.0-dev b006 - 2026-09-21
 
@@ -254,18 +254,18 @@ ESP32-C3 Custom I²C compatibility build; rotation logic is unchanged.
 - Custom mode now reuses the global `Wire` controller on single-I²C SoCs instead of attempting unavailable `TwoWire(1)`.
 - ESP32 targets with more than one I²C controller keep the dedicated secondary-bus behavior.
 - Fixed misleading `GY-521 (MPU-6050) | OK` diagnostics when bus initialization fails before sensor initialization.
-- Added ESP32-C3 Custom I²C qualification notes.
+- Added ESP32-C3 Custom I²C testing notes.
 
 ## 0.1.0-dev b005 - 2026-09-20
 
-GY-521 / MPU-6050 qualification build; final-raster rotation logic is unchanged.
+GY-521 / MPU-6050 testing build; final-raster rotation logic is unchanged.
 
 - Added explicit MPU-6050 initialization diagnostics.
 - Added `WHO_AM_I` tracking and display in WLED Info.
 - Added MPU-6050 configuration read-back verification for power/clock, DLPF, sample divider and accelerometer full-scale range.
 - Replaced the generic sensor-init failure with specific status messages.
-- Added a GY-521 wiring and hardware qualification procedure to the documentation.
-- Kept LIS3DH behavior and the hardware-qualified orientation classifier unchanged.
+- Added a GY-521 wiring and hardware testing procedure to the documentation.
+- Kept LIS3DH behavior and the orientation classifier, previously tested on hardware, unchanged.
 
 ## 0.1.0-dev b004 - 2026-09-20
 
