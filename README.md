@@ -1,11 +1,11 @@
 # WLED Matrix Auto Rotation
 
-**Version:** `0.1.2-dev-b001`  
-**Status:** development bugfix build based on the stable 0.1.1 release; adds WLED PinManager ownership for Custom I²C pins
+**Version:** `0.1.2-dev-b006`  
+**Status:** development bugfix build based on the stable 0.1.1 release; hardens I²C ownership and lifecycle handling
 
 A standalone WLED usermod that automatically rotates the **final 2D matrix raster** according to an accelerometer, without changing effect or segment state.
 
-`0.1.2-dev-b001` is a focused integration fix: Custom I²C now reserves SDA/SCL through WLED `PinManager`, releases the exact reserved pair when ownership ends, and rolls the reservation back if bus initialization fails. Shared I²C ownership semantics are unchanged.
+`0.1.2-dev-b006` is a documentation/qualification consolidation of the hardware-verified `0.1.2-dev-b005` runtime; there are no functional runtime changes other than the version string. The qualified runtime hardens the complete I²C lifecycle after real-hardware testing exposed both an initialization-order race on the Waveshare board and a single-controller Custom-to-Shared transition hazard on ESP32-C3. The Waveshare SDA47/SCL48 bus is treated as board-shared by contract, MAR-owned buses release the controller before GPIO, and Shared I²C remains non-owning.
 
 <p align="center">
   <img src="docs/images/auto-rotation-demo.gif" alt="WLED Matrix Auto Rotation demo" width="448">
@@ -98,10 +98,10 @@ LIS3DH and the MPU/ICM backend use a ±2 g profile. The new QMI8658 backend uses
 
 | Mode | Behavior | Typical use |
 | --- | --- | --- |
-| **Matrix Portal** | Initializes the board-default `Wire` bus and probes the sensor address automatically | Matrix Portal S3 / onboard LIS3DH |
-| **Waveshare ESP32-S3 RGB Matrix** | Initializes `Wire` on SDA `47` / SCL `48` and probes the sensor address automatically | Waveshare board / onboard QMI8658 |
+| **Matrix Portal** | Reuses WLED global I²C when configured on SDA16/SCL17; otherwise MAR reserves those pins and starts an owned bus | Matrix Portal S3 / onboard LIS3DH |
+| **Waveshare ESP32-S3 RGB Matrix** | Always uses board-shared global `Wire` on SDA47/SCL48; MAR never reserves or reinitializes this bus | Waveshare board / onboard QMI8658 |
 | **Shared** | Uses WLED's already initialized global `Wire` bus without changing pins, clock or ownership | Multiple I²C devices on the same SDA/SCL pair |
-| **Custom** | Uses configured SDA/SCL pins; explicit or automatic sensor address | Dedicated/custom wiring |
+| **Custom** | Uses configured SDA/SCL pins; MAR owns a free bus, or on single-controller ESP32 safely reuses the matching WLED global bus | Dedicated/custom wiring |
 
 ### Shared I²C
 
@@ -114,7 +114,9 @@ This mode has been hardware-tested on ESP32-C3 with both devices on the same phy
 
 Both operate concurrently because their addresses differ.
 
-On single-controller devices such as ESP32-C3, use `Shared` when another WLED component already owns the I²C bus. `Custom` necessarily rebinds that controller to the selected pins.
+On single-controller devices such as ESP32-C3, use `Shared` when another WLED component owns I²C. In `Custom`, a pin pair matching WLED's configured global bus is reused safely; a different active WLED bus is rejected instead of being stolen. When WLED has no global I²C bus configured, MAR may own the sole controller and will call `Wire.end()` before releasing its Custom pins.
+
+On the Waveshare ESP32-S3 RGB Matrix, SDA47/SCL48 is explicitly treated as a board-shared global `Wire` bus regardless of initialization order. MAR never allocates or reinitializes that pair, including when selected through Custom mode. MatrixPortal 16/17 remains PinManager-aware and may use an MAR-owned controller when no compatible global bus exists. For arbitrary Custom pins while an untracked global `Wire` bus is active, MAR fails safely rather than attaching a second controller to potentially identical wires.
 
 ## Configuration UI
 
@@ -205,9 +207,13 @@ These fields are intended to make sensor wiring and orientation qualification po
 | Two-column calibration UI | ESP32-C3 / WLED desktop UI | PASS |
 | QMI8658 detection and XYZ | Waveshare ESP32-S3 RGB Matrix + 64×64 HUB75 | **PASS** |
 | QMI8658 automatic rotation / Auto Calibrate | Waveshare ESP32-S3 RGB Matrix + 64×64 HUB75 | **PASS** |
+| Waveshare board-shared I²C lifecycle (Custom 47/48 / preset / Shared round-trip) | Waveshare ESP32-S3 RGB Matrix + QMI8658 + SHTC3 | **PASS** |
+| Single-controller Custom → Shared → Custom lifecycle | ESP32-C3 + ICM-20689, Custom SDA8/SCL9 | **PASS** |
 | MPU-6050-specific hardware | — | Pending |
 
 The v0.1.1 qualification run on the Waveshare target used WLED 17.0.0-devV5 with a 64×64 HUB75 matrix. The onboard QMI8658 was detected at `0x6B` with `WHO_AM_I = 0x05`; the captured runtime snapshot reported 1146 successful samples, 0 read errors and no spurious disconnect/reconnect events.
+
+The v0.1.2 lifecycle qualification additionally verified the Waveshare board-shared bus through `Custom 47/48 -> Waveshare preset -> Shared -> Waveshare preset`, with QMI8658 and SHTC3 remaining healthy and zero MAR read errors during the captured passes. On ESP32-C3, the MAR-owned single-controller path was verified with ICM-20689 on Custom SDA8/SCL9 through `Custom -> Shared unavailable -> Custom`; uptime continued across both transitions, no new panic/reboot occurred, and the sensor returned to `ready` after reacquiring the owned bus.
 
 ## Known limitations
 

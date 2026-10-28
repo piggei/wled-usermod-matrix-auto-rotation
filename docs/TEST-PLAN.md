@@ -1,6 +1,6 @@
-# v0.1.2-dev-b001 validation plan
+# v0.1.2-dev-b006 validation plan
 
-`0.1.2-dev-b001` is a focused bugfix build based on stable `0.1.1`. Its only intended runtime change is correct WLED `PinManager` ownership for Custom I²C SDA/SCL. Existing 0.1.1 sensor, calibration, recovery and raster behavior remain the regression baseline.
+`0.1.2-dev-b006` is a documentation/qualification consolidation of the hardware-verified `0.1.2-dev-b005` runtime; no functional runtime behavior changes except the version string. The underlying 0.1.2 hardening keeps the PinManager reservation fix, the explicit board-shared Waveshare SDA47/SCL48 contract, safe MAR-owned bus teardown, and non-owning Shared I²C behavior. Existing sensor, calibration, recovery and raster behavior remain the regression baseline.
 
 Hardware validated for the 0.1.0 release:
 
@@ -17,15 +17,37 @@ Hardware validated for the 0.1.0 release:
 The checks below are the release-regression matrix.
 
 
-## 0.1.2 Custom I2C PinManager regression
+## 0.1.2 I2C ownership/lifecycle regression
 
-- [ ] Custom mode starts successfully on a free SDA/SCL pair.
+- [x] Custom mode starts successfully on a free SDA/SCL pair. **PASS: ESP32-C3, SDA8/SCL9, ICM-20689.**
 - [ ] A conflicting WLED allocation causes MAR Custom initialization to fail without taking either pin.
-- [ ] After disabling MAR, disabling Auto Rotation, or switching away from Custom mode, the previously reserved pair is released.
+- [x] Switching away from an MAR-owned bus releases the previously reserved pair. **PASS: ESP32-C3 Custom 8/9 -> Disabled and Custom 8/9 -> Shared.** (Auto Rotation-only disable remains a separate regression case.)
+- [x] On single-controller targets, an MAR-owned `Wire` bus is ended before its pins are released. **PASS: ESP32-C3 teardown completed without panic; Shared then waited safely for an external owner.**
 - [ ] Changing Custom SDA/SCL releases the old reserved pair and reserves the new pair.
-- [ ] A failed `Wire.begin()` / dedicated-bus begin rolls back both pin reservations.
-- [ ] Shared mode behavior remains unchanged and does not reserve or release the global WLED I2C pins.
-- [ ] MatrixPortal and Waveshare presets remain functionally unchanged.
+- [ ] A failed bus begin rolls back both pin reservations.
+- [x] Shared mode remains non-owning and never begins, ends, reserves, repins or retimes WLED global I2C. **PASS on Waveshare shared board bus and ESP32-C3 unavailable-Shared path.**
+- [ ] On single-controller ESP32, Custom matching WLED global SDA/SCL reuses WLED `Wire` without taking ownership.
+- [ ] On single-controller ESP32, Custom on different pins is rejected while a WLED global I2C bus is configured.
+- [x] Waveshare preset 47/48 reports shared ownership and coexists with the board bus; both SHTC3 + QMI8658 remain healthy. **PASS on real Waveshare hardware.** (The exact delayed-owner startup timing remains covered by implementation logic rather than an instrumented timing trace.)
+- [x] Waveshare: Custom 47/48 is always treated as board-shared global `Wire` (no PinManager reservation / second controller) and both SHTC3 + QMI8658 remain healthy. **PASS: diagnostics reported `WLED shared`.**
+- [ ] MatrixPortal: if global `Wire` is already active but WLED pin bookkeeping is unset, preset 16/17 reuses global `Wire`.
+- [ ] Arbitrary Custom pins are rejected when global `Wire` is active but its pins are untracked, unless they are one of the known board-bus pairs.
+- [ ] MatrixPortal preset reuses WLED global I2C when it is configured on SDA16/SCL17.
+- [x] Waveshare preset reuses the board/global I2C on SDA47/SCL48. **PASS: QMI8658 + SHTC3 remained healthy.**
+- [ ] If a preset cannot reuse WLED global I2C, MAR reserves its fixed pins before starting an owned bus and rejects conflicts.
+- [x] Transition: Custom -> Shared. **PASS: ESP32-C3 owned Custom 8/9 -> unavailable Shared, no reboot/panic; Waveshare Custom 47/48 -> Shared also PASS.**
+- [x] Transition: Shared -> Custom. **PASS: ESP32-C3 Shared unavailable -> Custom 8/9 reacquired bus and ICM-20689 returned ready.**
+- [x] Transition: Waveshare preset -> Shared -> Waveshare preset. **PASS: QMI8658 + SHTC3 remained healthy throughout.**
+- [x] Transition: Custom -> Waveshare preset. **PASS for board-shared Custom 47/48 -> Waveshare preset.**
+- [ ] Runtime pin-conflict rejection and bus-start rollback leave no stale reservations.
+
+### Hardware evidence captured for b005/b006 consolidation
+
+- **Waveshare ESP32-S3 RGB Matrix / QMI8658 / SHTC3:** `Custom 47/48 -> Waveshare preset -> Shared -> Waveshare preset` completed without bus loss. MAR diagnostics reported `WLED shared`, QMI8658 remained at `0x6B / ID 0x05`, SHTC3 continued returning valid temperature/humidity, and the captured MAR health snapshots remained at 0 read errors.
+- **ESP32-C3 / ICM-20689:** Custom SDA8/SCL9 reported `MAR owned` and `sensor ready`; `Custom -> Shared` preserved uptime and `bootReset=software code=3`, then correctly reported `shared I2C waiting for WLED Wire`; `Shared -> Custom 8/9` reacquired ownership and returned ICM-20689 `0x68 / ID 0x98` to `sensor ready` without reboot.
+- The earlier b004 `Custom -> Shared` panic is therefore considered reproduced, isolated, and fixed by b005.
+
+Untested items remain unchecked above and must not be treated as hardware-qualified merely because the code path exists.
 
 ## 1. Configuration UI
 
@@ -241,3 +263,12 @@ Final Waveshare release qualification snapshot:
 - health snapshot: `1146` successful reads, `0` errors, `0` disconnects, `0` reconnects;
 - automatic rotation: **PASS**;
 - Auto Calibrate: **PASS**.
+
+## ESP32-C3 single-controller transition regression
+
+- Start in Custom mode on a MAR-owned bus (qualified case: SDA 8 / SCL 9 with ICM-20689).
+- Confirm `MAR owned`, sensor ready, and zero read errors.
+- Switch directly to Shared without rebooting.
+- If no WLED/global Shared bus exists, expected result is `shared I2C waiting for WLED Wire`, sensor not ready, no panic/reboot, and no MAR-owned pins remaining.
+- If a WLED/global Shared bus is later initialized, MAR must attach on retry without calling `Wire.begin()` or reserving pins.
+- Disable from Custom-owned mode remains a teardown-only control test: no panic/reboot and diagnostics show `idle`.

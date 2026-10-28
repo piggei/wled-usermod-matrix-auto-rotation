@@ -7,14 +7,14 @@
 #include "matrix_auto_rotation_sensor.h"
 
 // WLED Matrix Auto Rotation
-// v0.1.2-dev-b001
+// v0.1.2-dev-b006
 //
 // Design rule: the usermod never modifies effect/segment state. Rotation is
 // applied in handleOverlayDraw(), after WLED has composited the final logical
 // raster and immediately before WLED applies its own logical->physical ledmap.
 
 namespace {
-constexpr char MAR_VERSION[] = "0.1.2-dev-b001";
+constexpr char MAR_VERSION[] = "0.1.2-dev-b006";
 constexpr uint8_t I2C_MODE_MATRIXPORTAL = 0;
 constexpr uint8_t I2C_MODE_CUSTOM = 1;
 constexpr uint8_t I2C_MODE_SHARED = 4;
@@ -75,10 +75,12 @@ private:
   bool _initDone = false;
   bool _needsReinit = false;
   bool _sensorReady = false;
-  bool _customBusStarted = false;
-  bool _customPinsReserved = false;
-  int8_t _reservedCustomSda = -1;
-  int8_t _reservedCustomScl = -1;
+  bool _ownedBusStarted = false;
+  bool _ownedBusUsesGlobalWire = false;
+  bool _ownedPinsReserved = false;
+  bool _usingWledSharedBus = false;
+  int8_t _reservedBusSda = -1;
+  int8_t _reservedBusScl = -1;
   const char *_status = "not initialized";
 
   MARAccelerometer _sensor;
@@ -170,114 +172,266 @@ private:
     return true;
   }
 
-  void stopCustomBus() {
-#if MAR_HAS_DEDICATED_I2C
-    if (_customBusStarted) marCustomWire.end();
-#endif
-    // On single-controller ESP32 targets (e.g. ESP32-C3), Custom mode uses
-    // the global Wire instance. Preserve the existing non-destructive shutdown
-    // behavior here: MAR stops using the bus, but does not tear down global Wire.
-    _customBusStarted = false;
+  bool wledGlobalBusMatches(int8_t sda, int8_t scl) const {
+    return sda >= 0 && scl >= 0 && i2c_sda == sda && i2c_scl == scl;
+  }
 
-    if (_customPinsReserved) {
+  bool globalWireIsActive() const {
+#if defined(ARDUINO_ARCH_ESP32)
+    // Arduino-ESP32 returns 0 when the controller is not initialized. This
+    // catches buses started by board/user code even when WLED's i2c_sda/scl
+    // bookkeeping was never populated.
+    return Wire.getClock() > 0;
+#else
+    return false;
+#endif
+  }
+
+  bool wledGlobalBusPinsKnown() const {
+    return i2c_sda >= 0 && i2c_scl >= 0;
+  }
+
+  bool validateOwnedBusPins(int8_t sda, int8_t scl, const char *invalidStatus, const char *unusableStatus) {
+#if defined(ARDUINO_ARCH_ESP32)
+    if (sda < 0 || scl < 0 || sda == scl) {
+      _status = invalidStatus;
+      return false;
+    }
+    if (!PinManager::isPinOk(uint8_t(sda), true) || !PinManager::isPinOk(uint8_t(scl), true)) {
+      _status = unusableStatus;
+      return false;
+    }
+    return true;
+#else
+    (void)sda; (void)scl; (void)invalidStatus; (void)unusableStatus;
+    return false;
+#endif
+  }
+
+  bool reserveOwnedBusPins(int8_t sda, int8_t scl, const char *conflictStatus) {
+#if defined(ARDUINO_ARCH_ESP32)
+    const managed_pin_type pins[] = {{sda, true}, {scl, true}};
+    if (!PinManager::allocateMultiplePins(pins, 2, PinOwner::UM_Unspecified)) {
+      _status = conflictStatus;
+      return false;
+    }
+    _ownedPinsReserved = true;
+    _reservedBusSda = sda;
+    _reservedBusScl = scl;
+    return true;
+#else
+    (void)sda; (void)scl; (void)conflictStatus;
+    return false;
+#endif
+  }
+
+  void stopOwnedBus() {
+#if MAR_HAS_DEDICATED_I2C
+    if (_ownedBusStarted && !_ownedBusUsesGlobalWire) marCustomWire.end();
+#endif
+#if defined(ARDUINO_ARCH_ESP32)
+    // On single-controller targets an owned MAR bus uses global Wire. End the
+    // peripheral before releasing its pins so PinManager can never advertise
+    // GPIO as free while the controller is still attached to them.
+    if (_ownedBusStarted && _ownedBusUsesGlobalWire) Wire.end();
+#endif
+    _ownedBusStarted = false;
+    _ownedBusUsesGlobalWire = false;
+    _usingWledSharedBus = false;
+
+    if (_ownedPinsReserved) {
       const managed_pin_type pins[] = {
-        {_reservedCustomSda, true},
-        {_reservedCustomScl, true}
+        {_reservedBusSda, true},
+        {_reservedBusScl, true}
       };
       PinManager::deallocateMultiplePins(pins, 2, PinOwner::UM_Unspecified);
-      _customPinsReserved = false;
-      _reservedCustomSda = -1;
-      _reservedCustomScl = -1;
+      _ownedPinsReserved = false;
+      _reservedBusSda = -1;
+      _reservedBusScl = -1;
     }
   }
 
-  TwoWire *prepareI2CBus() {
-    stopCustomBus();
-
-    if (_i2cMode == I2C_MODE_MATRIXPORTAL) {
-      // Adafruit MatrixPortal ESP32-S3 Arduino variant: SDA=16, SCL=17.
-      // Keep Wire.begin() without explicit pins so the board variant remains
-      // authoritative; this path is hardware-qualified on the test unit.
-      Wire.begin();
-      Wire.setClock(400000);
-      return &Wire;
-    }
-
-    if (_i2cMode == I2C_MODE_SHARED) {
-      // Shared mode uses WLED's already-initialized global Wire instance.
-      // Do not call begin(), end(), setPins() or setClock() here: the owner
-      // of the shared WLED I2C bus remains authoritative for pins and speed.
-      return &Wire;
-    }
-
-    if (_i2cMode == I2C_MODE_WAVESHARE_S3_RGB_MATRIX) {
+  TwoWire *startOwnedBus(int8_t sda, int8_t scl, const char *invalidStatus,
+                         const char *unusableStatus, const char *conflictStatus,
+                         const char *beginFailStatus) {
 #if defined(ARDUINO_ARCH_ESP32)
-      // Waveshare ESP32-S3 RGB Matrix onboard I2C bus: SDA=47, SCL=48.
-      // The QMI8658 and other onboard I2C devices share this physical bus.
-      if (!Wire.begin(47, 48, 400000)) {
-        _status = "Waveshare I2C begin failed";
-        return nullptr;
-      }
-      Wire.setClock(400000);
-      return &Wire;
-#else
-      _status = "Waveshare preset requires ESP32";
-      return nullptr;
-#endif
-    }
-
-#if defined(ARDUINO_ARCH_ESP32)
-    if (_customSda < 0 || _customScl < 0 || _customSda == _customScl) {
-      _status = "invalid custom I²C pins";
-      return nullptr;
-    }
-    if (!PinManager::isPinOk(uint8_t(_customSda), true) || !PinManager::isPinOk(uint8_t(_customScl), true)) {
-      _status = "custom I²C pin not usable";
-      return nullptr;
-    }
-
-    // Custom mode owns its GPIO pair exclusively. Reserve both pins atomically
-    // before starting the bus so no later WLED component/usermod can claim them.
-    // Out-of-tree usermods cannot add a private PinOwner without patching WLED,
-    // therefore use the dedicated generic usermod owner rather than impersonating
-    // another built-in module. Shared mode deliberately performs no allocation.
-    const managed_pin_type customPins[] = {
-      {_customSda, true},
-      {_customScl, true}
-    };
-    if (!PinManager::allocateMultiplePins(customPins, 2, PinOwner::UM_Unspecified)) {
-      _status = "custom I²C pin conflict";
-      return nullptr;
-    }
-    _customPinsReserved = true;
-    _reservedCustomSda = _customSda;
-    _reservedCustomScl = _customScl;
+    if (!validateOwnedBusPins(sda, scl, invalidStatus, unusableStatus)) return nullptr;
+    if (!reserveOwnedBusPins(sda, scl, conflictStatus)) return nullptr;
 
 #if MAR_HAS_DEDICATED_I2C
-    if (!marCustomWire.begin(_customSda, _customScl, 400000)) {
-      _status = "custom I²C begin failed";
-      stopCustomBus();
+    if (!marCustomWire.begin(sda, scl, 400000)) {
+      _status = beginFailStatus;
+      stopOwnedBus();
       return nullptr;
     }
     marCustomWire.setClock(400000);
-    _customBusStarted = true;
+    _ownedBusStarted = true;
+    _ownedBusUsesGlobalWire = false;
     return &marCustomWire;
 #else
-    // ESP32-C3 and other single-controller ESP32 variants cannot create
-    // TwoWire(1). Rebind the sole hardware controller to the configured
-    // Custom pins instead.
+    // With only one hardware I2C controller, never steal an already configured
+    // WLED global bus on different pins. The caller may use the matching WLED
+    // bus as Shared instead, or Custom can own Wire when WLED has no I2C bus.
+    if (i2c_sda >= 0 && i2c_scl >= 0) {
+      _status = "custom I2C conflicts with WLED bus";
+      stopOwnedBus();
+      return nullptr;
+    }
     Wire.end();
-    if (!Wire.begin(_customSda, _customScl, 400000)) {
-      _status = "custom I²C begin failed";
-      stopCustomBus();
+    if (!Wire.begin(sda, scl, 400000)) {
+      _status = beginFailStatus;
+      stopOwnedBus();
       return nullptr;
     }
     Wire.setClock(400000);
-    _customBusStarted = true;
+    _ownedBusStarted = true;
+    _ownedBusUsesGlobalWire = true;
     return &Wire;
 #endif
 #else
-    _status = "custom I²C requires ESP32";
+    (void)sda; (void)scl; (void)invalidStatus; (void)unusableStatus;
+    (void)conflictStatus; (void)beginFailStatus;
+    return nullptr;
+#endif
+  }
+
+  TwoWire *preparePresetBus(int8_t sda, int8_t scl, const char *name) {
+#if defined(ARDUINO_ARCH_ESP32)
+    // First honor WLED's explicit bookkeeping when available.
+    if (wledGlobalBusMatches(sda, scl)) {
+      _usingWledSharedBus = true;
+      return &Wire;
+    }
+
+    // Some board/user code starts global Wire directly without updating
+    // WLED's i2c_sda/i2c_scl globals (Waveshare SHTC3 is a real example).
+    // If global Wire is already live and WLED has no contradictory pin record,
+    // the safest interpretation for a board preset is that the board bus is
+    // already owned elsewhere. Reuse it and never start a second controller on
+    // the same physical wires.
+    if (globalWireIsActive()) {
+      if (wledGlobalBusPinsKnown()) {
+        _status = "preset I2C conflicts with active WLED bus";
+        return nullptr;
+      }
+      _usingWledSharedBus = true;
+      return &Wire;
+    }
+
+#if !MAR_HAS_DEDICATED_I2C
+    // A single-controller target with an explicitly configured unrelated WLED
+    // bus cannot safely run an independently initialized preset.
+    if (wledGlobalBusPinsKnown()) {
+      _status = "preset I2C conflicts with WLED bus";
+      return nullptr;
+    }
+#endif
+
+    const char *invalidStatus = "preset I2C pins invalid";
+    const char *unusableStatus = "preset I2C pin not usable";
+    const char *conflictStatus = "preset I2C pin conflict";
+    const char *beginFailStatus = "preset I2C begin failed";
+    (void)name;
+    return startOwnedBus(sda, scl, invalidStatus, unusableStatus, conflictStatus, beginFailStatus);
+#else
+    (void)sda; (void)scl; (void)name;
+    _status = "preset I2C requires ESP32";
+    return nullptr;
+#endif
+  }
+
+  TwoWire *prepareI2CBus() {
+    // Shared mode must never probe a Wire instance that MAR itself just ended.
+    // Validate whether an external/global owner actually exists before tearing
+    // down a MAR-owned single-controller bus. WLED pin bookkeeping is the
+    // strongest signal; otherwise an already-active Wire counts only when it
+    // is not the bus currently owned by MAR.
+    if (_i2cMode == I2C_MODE_SHARED) {
+      const bool marOwnsGlobalWire = _ownedBusStarted && _ownedBusUsesGlobalWire;
+      const bool sharedAvailable = wledGlobalBusPinsKnown() ||
+                                   (globalWireIsActive() && !marOwnsGlobalWire);
+
+      stopOwnedBus();
+      _usingWledSharedBus = true;
+
+      if (!sharedAvailable) {
+        _status = "shared I2C waiting for WLED Wire";
+        return nullptr;
+      }
+      return &Wire;
+    }
+
+    stopOwnedBus();
+
+    if (_i2cMode == I2C_MODE_MATRIXPORTAL) {
+      // MatrixPortal S3 onboard I2C pins. Reuse WLED's global bus when WLED is
+      // already configured on these pins; otherwise MAR reserves the pair and
+      // owns a dedicated controller for the preset.
+      return preparePresetBus(16, 17, "Matrix Portal");
+    }
+
+    if (_i2cMode == I2C_MODE_WAVESHARE_S3_RGB_MATRIX) {
+      // Waveshare ESP32-S3 RGB Matrix onboard I2C is a board-shared bus on
+      // SDA=47/SCL=48. Other board components (notably SHTC3) may initialize
+      // global Wire after MAR depending on usermod setup order, so MAR must
+      // never claim these pins or start a second controller. Return global
+      // Wire immediately; sensor init/recovery will retry until the board bus
+      // owner has initialized it.
+      _usingWledSharedBus = true;
+      return &Wire;
+    }
+
+#if defined(ARDUINO_ARCH_ESP32)
+    if (!validateOwnedBusPins(_customSda, _customScl, "invalid custom I2C pins", "custom I2C pin not usable")) {
+      return nullptr;
+    }
+
+    // SDA47/SCL48 is the Waveshare board-shared I2C bus even when selected
+    // through Custom mode. Treat it as global Wire unconditionally so setup
+    // order cannot cause MAR to claim the pins before SHTC3/board code starts
+    // the bus. Custom still controls the sensor address.
+    if (_customSda == 47 && _customScl == 48) {
+      _usingWledSharedBus = true;
+      return &Wire;
+    }
+
+    // A Custom request matching WLED's explicit global-bus bookkeeping is
+    // safely treated as shared ownership while still honoring Custom address.
+    if (wledGlobalBusMatches(_customSda, _customScl)) {
+      _usingWledSharedBus = true;
+      return &Wire;
+    }
+
+    // If global Wire is active but WLED does not know its pins, do not blindly
+    // place another controller on an arbitrary pair. For the two board-bus pin
+    // pairs that MAR exposes as presets, reuse the already-active global Wire;
+    // for any other Custom pair fail safely because the actual Wire pins cannot
+    // be queried through the public Arduino TwoWire API.
+    if (globalWireIsActive() && !wledGlobalBusPinsKnown()) {
+      const bool knownBoardBus = (_customSda == 16 && _customScl == 17) ||
+                                 (_customSda == 47 && _customScl == 48);
+      if (knownBoardBus) {
+        _usingWledSharedBus = true;
+        return &Wire;
+      }
+      _status = "custom I2C conflicts with untracked active Wire";
+      return nullptr;
+    }
+
+#if !MAR_HAS_DEDICATED_I2C
+    // A single-controller ESP32 cannot steal a different explicitly configured
+    // WLED global bus.
+    if (wledGlobalBusPinsKnown()) {
+      _status = "custom I2C conflicts with WLED bus";
+      return nullptr;
+    }
+#endif
+
+    return startOwnedBus(_customSda, _customScl,
+                         "invalid custom I2C pins", "custom I2C pin not usable",
+                         "custom I2C pin conflict", "custom I2C begin failed");
+#else
+    _status = "custom I2C requires ESP32";
     return nullptr;
 #endif
   }
@@ -366,7 +520,7 @@ private:
     _status = _enabled ? "ready" : "disabled";
 
     if (!_enabled) {
-      stopCustomBus();
+      stopOwnedBus();
       _requestedRotation = 0;
       _effectiveRotation = 0;
       _rotationUnsupported = false;
@@ -377,7 +531,7 @@ private:
     updateEffectiveRotation(true);
 
     if (!_autoRotationEnabled) {
-      stopCustomBus();
+      stopOwnedBus();
       _status = "static rotation";
       return;
     }
@@ -530,10 +684,12 @@ public:
     const uint32_t now = millis();
     if (!_sensorReady) {
       // A sensor that was previously operational is retried once per minute.
-      // Before the first successful detection, Shared mode gets a short fast-retry
-      // window because WLED/user-mod initialization order is not guaranteed.
+      // Before the first successful detection, any path currently using global
+      // shared Wire gets a short fast-retry window because WLED/usermod setup
+      // order is not guaranteed (Shared mode and board-shared aliases such as
+      // Waveshare 47/48).
       uint32_t retryInterval = SENSOR_RECONNECT_INTERVAL_MS;
-      if (!_sensorEverReady && _i2cMode == I2C_MODE_SHARED &&
+      if (!_sensorEverReady && _usingWledSharedBus &&
           uint32_t(now - _runtimeStartedAt) <= SHARED_BOOT_RETRY_WINDOW_MS) {
         retryInterval = SHARED_BOOT_RETRY_INTERVAL_MS;
       }
@@ -618,16 +774,17 @@ public:
     else if (_i2cMode == I2C_MODE_WAVESHARE_S3_RGB_MATRIX) busModeText = "Waveshare ESP32-S3 RGB Matrix";
     busMode.add(busModeText);
 
-    char busText[96];
+    char busText[120];
+    const char *ownershipText = _usingWledSharedBus ? "WLED shared" : (_ownedPinsReserved ? "MAR owned" : "idle");
     if (_i2cMode == I2C_MODE_CUSTOM) {
-      if (_configuredAddress) snprintf(busText, sizeof(busText), "SDA %d | SCL %d | address 0x%02X", _customSda, _customScl, _configuredAddress);
-      else snprintf(busText, sizeof(busText), "SDA %d | SCL %d | address auto", _customSda, _customScl);
+      if (_configuredAddress) snprintf(busText, sizeof(busText), "SDA %d | SCL %d | address 0x%02X | %s", _customSda, _customScl, _configuredAddress, ownershipText);
+      else snprintf(busText, sizeof(busText), "SDA %d | SCL %d | address auto | %s", _customSda, _customScl, ownershipText);
     } else if (_i2cMode == I2C_MODE_SHARED) {
       snprintf(busText, sizeof(busText), "owned by WLED | address auto");
     } else if (_i2cMode == I2C_MODE_WAVESHARE_S3_RGB_MATRIX) {
-      snprintf(busText, sizeof(busText), "SDA 47 | SCL 48 | address auto");
+      snprintf(busText, sizeof(busText), "SDA 47 | SCL 48 | address auto | %s", ownershipText);
     } else {
-      snprintf(busText, sizeof(busText), "board-default Wire | address auto");
+      snprintf(busText, sizeof(busText), "SDA 16 | SCL 17 | address auto | %s", ownershipText);
     }
     JsonArray bus = user.createNestedArray(F("MAR I²C config"));
     bus.add(busText);
@@ -689,7 +846,7 @@ public:
       snprintf(recoveryText, sizeof(recoveryText), "inactive");
     } else {
       uint32_t retryInterval = SENSOR_RECONNECT_INTERVAL_MS;
-      if (!_sensorEverReady && _i2cMode == I2C_MODE_SHARED && uint32_t(nowInfo - _runtimeStartedAt) <= SHARED_BOOT_RETRY_WINDOW_MS) {
+      if (!_sensorEverReady && _usingWledSharedBus && uint32_t(nowInfo - _runtimeStartedAt) <= SHARED_BOOT_RETRY_WINDOW_MS) {
         retryInterval = SHARED_BOOT_RETRY_INTERVAL_MS;
       }
       const uint32_t elapsed = uint32_t(nowInfo - _lastSensorInitAttemptAt);

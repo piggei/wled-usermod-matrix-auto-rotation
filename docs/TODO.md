@@ -8,13 +8,14 @@
 
 - Confirm the MPU-family backend on a known genuine MPU-6050 (`WHO_AM_I 0x68/0x69`).
 - QMI8658 on Waveshare ESP32-S3 RGB Matrix (SDA 47 / SCL 48): **hardware-qualified and released in 0.1.1**.
+- v0.1.2 I²C lifecycle hardening: **hardware-qualified in dev-b005** for Waveshare board-shared 47/48 transitions and ESP32-C3 MAR-owned Custom 8/9 -> Shared -> Custom round-trip; release promotion still pending.
 
 ## 0.2.0 candidates
 
 - **Sensor Auto Detect** after the I²C bus/board/pins have already been configured. Keep bus selection and sensor detection as separate concepts.
 - Optional explicit sensor address selection in Shared mode for installations containing multiple compatible devices.
 - Add new accelerometer backends without changing the common orientation engine.
-- Consider a dedicated WLED PinManager owner/claim path for Custom I²C if an upstream-compatible usermod pin-owner mechanism is available.
+- Consider a dedicated WLED PinManager owner ID if upstream provides a registration path suitable for out-of-tree usermods; current builds use `PinOwner::UM_Unspecified` consistently.
 
 ## Design constraints to preserve
 

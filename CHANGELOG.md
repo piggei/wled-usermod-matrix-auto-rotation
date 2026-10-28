@@ -1,5 +1,48 @@
 # Changelog
 
+## 0.1.2-dev-b006
+
+- Documentation/qualification consolidation of the hardware-verified b005 runtime; no functional runtime changes other than the version string.
+- Record Waveshare ESP32-S3 RGB Matrix lifecycle PASS for `Custom 47/48 -> Waveshare preset -> Shared -> Waveshare preset`, with QMI8658 and SHTC3 remaining healthy on the board-shared bus.
+- Record ESP32-C3 single-controller lifecycle PASS for ICM-20689 on Custom SDA8/SCL9 through `Custom -> Shared unavailable -> Custom`, with continuous uptime and no new panic/reboot.
+- Mark only actually executed lifecycle cases as PASS; conflict rejection, failed-bus-start rollback, arbitrary pin reassignment and MatrixPortal ownership regressions remain pending.
+- Keep the external-review lower-priority sensor-initialization `delay()` cleanup as a future improvement.
+
+## 0.1.2-dev-b005
+
+- Fix ESP32-C3 single-controller transition from MAR-owned Custom I2C to Shared mode.
+- Shared mode now validates that a global/external `Wire` owner actually exists before probing it.
+- A `Wire` instance owned by MAR itself is never mistaken for an available Shared bus.
+- MAR tears down its owned bus and releases PinManager pins, then waits safely if no WLED/global Shared bus is available.
+- Shared startup/recovery retries remain non-owning and can attach later if WLED or another board/user module initializes global `Wire`.
+- Hardware isolation test: Custom 8/9 -> Disabled confirmed that `Wire.end()` + PinManager release alone does not panic on ESP32-C3; the prior panic was caused by probing an ended `Wire` immediately after switching to Shared.
+
+## 0.1.2-dev-b004
+
+- Fix the remaining Waveshare initialization-order race exposed by b003 hardware testing.
+- Treat the Waveshare onboard SDA47/SCL48 I2C bus as board-shared by contract instead of trying to infer ownership from `Wire.getClock()` or WLED pin bookkeeping.
+- The Waveshare preset now always returns global `Wire` and never reserves 47/48, calls `Wire.begin()`, or starts a second controller.
+- Custom SDA47/SCL48 follows the same board-shared rule while preserving the user-selected sensor address.
+- Extend the fast startup retry window to every path currently using shared global `Wire`, including the Waveshare preset and Custom 47/48, so MAR can initialize after SHTC3/board code brings up the bus.
+- Preserve the PinManager reservation and controller-before-pin-release fixes for genuinely MAR-owned Custom/MatrixPortal buses.
+- Hardware regression motivating this build: b003 still reported `MAR owned` on 47/48 when MAR setup ran before the SHTC3 usermod, causing QMI8658 disconnects and null SHTC3 readings.
+
+## 0.1.2-dev-b003
+
+- Fix regression found during real Waveshare testing of b002: an already-active global `Wire` bus may exist even when WLED `i2c_sda/i2c_scl` bookkeeping is unset.
+- Detect an already initialized global Arduino `Wire` controller through `Wire.getClock()` before attempting a MAR-owned bus.
+- MatrixPortal (16/17) and Waveshare (47/48) presets reuse an active untracked global `Wire` bus rather than starting a second I2C controller on the same physical wires.
+- Custom mode on those same known board-bus pairs also reuses active global `Wire`; arbitrary Custom pairs are rejected when global `Wire` is active but its pins cannot be identified safely.
+- Preserve the b002 lifecycle fixes: MAR-owned single-controller buses are ended before pin release, Shared remains non-owning, and owned preset/Custom buses still reserve GPIO through PinManager.
+- Hardware regression that motivated this build: b002 Custom 47/48 on Waveshare caused both QMI8658 and SHTC3 to fail after a few transactions because two I2C controllers were attached to the same wires.
+
+- Close the external-review single-controller lifecycle finding: when MAR owns global `Wire`, call `Wire.end()` before releasing its SDA/SCL reservation.
+- Harden single-controller Custom mode: reuse WLED global `Wire` when Custom pins exactly match WLED I2C, reject attempts to steal an active WLED bus on different pins, and retain explicit Custom sensor-address selection.
+- Harden MatrixPortal and Waveshare board presets: reuse WLED global I2C when it is already configured on the preset pins; otherwise reserve the fixed preset pair through `PinManager` before starting an MAR-owned bus.
+- Preserve Shared mode as strictly non-owning: no `begin()`, `end()`, pin reservation, repinning or clock changes.
+- Expand the regression plan for pin-conflict rejection, bus-start rollback, disable/reconfiguration transitions, Custom-to-Shared transitions and preset ownership transitions.
+- Keep the lower-priority sensor-initialization `delay()` cleanup as a separate future improvement.
+
 ## 0.1.2-dev-b001
 
 - Reserve Custom I2C SDA/SCL pins atomically through WLED `PinManager` before starting the bus.
