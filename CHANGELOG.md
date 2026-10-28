@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.2-dev-b001
+
+- Reserve Custom I2C SDA/SCL pins atomically through WLED `PinManager` before starting the bus.
+- Track the actually reserved Custom pin pair separately from the current configuration.
+- Release the reserved pair when Custom-bus ownership ends and roll back the reservation if I2C initialization fails.
+- Shared I2C ownership semantics are unchanged: Shared mode does not allocate, release, rebind, or configure WLED's global bus.
+- Addresses the Important finding from the external Community Usermods review.
+
 ## 0.1.1 - 2026-10-01
 
 Stable release promoted from `0.1.1-rc.1` after the Waveshare ESP32-S3 RGB Matrix + QMI8658 release-candidate smoke test passed without runtime changes.

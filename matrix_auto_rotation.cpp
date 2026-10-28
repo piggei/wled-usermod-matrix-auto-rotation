@@ -7,14 +7,14 @@
 #include "matrix_auto_rotation_sensor.h"
 
 // WLED Matrix Auto Rotation
-// v0.1.1
+// v0.1.2-dev-b001
 //
 // Design rule: the usermod never modifies effect/segment state. Rotation is
 // applied in handleOverlayDraw(), after WLED has composited the final logical
 // raster and immediately before WLED applies its own logical->physical ledmap.
 
 namespace {
-constexpr char MAR_VERSION[] = "0.1.1";
+constexpr char MAR_VERSION[] = "0.1.2-dev-b001";
 constexpr uint8_t I2C_MODE_MATRIXPORTAL = 0;
 constexpr uint8_t I2C_MODE_CUSTOM = 1;
 constexpr uint8_t I2C_MODE_SHARED = 4;
@@ -76,6 +76,9 @@ private:
   bool _needsReinit = false;
   bool _sensorReady = false;
   bool _customBusStarted = false;
+  bool _customPinsReserved = false;
+  int8_t _reservedCustomSda = -1;
+  int8_t _reservedCustomScl = -1;
   const char *_status = "not initialized";
 
   MARAccelerometer _sensor;
@@ -172,9 +175,20 @@ private:
     if (_customBusStarted) marCustomWire.end();
 #endif
     // On single-controller ESP32 targets (e.g. ESP32-C3), Custom mode uses
-    // the global Wire instance. Do not end it here because other WLED
-    // components may also be sharing that physical bus.
+    // the global Wire instance. Preserve the existing non-destructive shutdown
+    // behavior here: MAR stops using the bus, but does not tear down global Wire.
     _customBusStarted = false;
+
+    if (_customPinsReserved) {
+      const managed_pin_type pins[] = {
+        {_reservedCustomSda, true},
+        {_reservedCustomScl, true}
+      };
+      PinManager::deallocateMultiplePins(pins, 2, PinOwner::UM_Unspecified);
+      _customPinsReserved = false;
+      _reservedCustomSda = -1;
+      _reservedCustomScl = -1;
+    }
   }
 
   TwoWire *prepareI2CBus() {
@@ -222,15 +236,22 @@ private:
       return nullptr;
     }
 
-    // Custom pins are checked against WLED's PinManager but are not
-    // claimed with a fake/borrowed Usermod ID. This keeps the usermod standalone
-    // and avoids impersonating another PinOwner. Conflicts are rejected against
-    // pins already allocated by WLED; Shared mode is preferred when another
-    // component already owns the physical I2C bus.
-    if (PinManager::isPinAllocated(uint8_t(_customSda)) || PinManager::isPinAllocated(uint8_t(_customScl))) {
+    // Custom mode owns its GPIO pair exclusively. Reserve both pins atomically
+    // before starting the bus so no later WLED component/usermod can claim them.
+    // Out-of-tree usermods cannot add a private PinOwner without patching WLED,
+    // therefore use the dedicated generic usermod owner rather than impersonating
+    // another built-in module. Shared mode deliberately performs no allocation.
+    const managed_pin_type customPins[] = {
+      {_customSda, true},
+      {_customScl, true}
+    };
+    if (!PinManager::allocateMultiplePins(customPins, 2, PinOwner::UM_Unspecified)) {
       _status = "custom I²C pin conflict";
       return nullptr;
     }
+    _customPinsReserved = true;
+    _reservedCustomSda = _customSda;
+    _reservedCustomScl = _customScl;
 
 #if MAR_HAS_DEDICATED_I2C
     if (!marCustomWire.begin(_customSda, _customScl, 400000)) {
@@ -248,6 +269,7 @@ private:
     Wire.end();
     if (!Wire.begin(_customSda, _customScl, 400000)) {
       _status = "custom I²C begin failed";
+      stopCustomBus();
       return nullptr;
     }
     Wire.setClock(400000);

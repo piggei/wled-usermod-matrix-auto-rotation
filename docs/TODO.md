@@ -23,3 +23,7 @@
 - `Setup Rotation` remains a visual raster offset; sensor calibration must not repurpose it.
 - Do not add continuous pitch/roll, gyro integration, interpolation or other IMU complexity unless a concrete use case requires it.
 - Preserve Shared I²C as non-owning: it must not reinitialize, repin or retime WLED's bus.
+
+## Runtime polish
+
+- [ ] Replace sensor-initialization `delay()` calls with timestamp-driven non-blocking stages (external review lower-priority finding).

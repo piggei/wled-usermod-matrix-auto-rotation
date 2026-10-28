@@ -1,9 +1,11 @@
 # WLED Matrix Auto Rotation
 
-**Version:** `0.1.1`  
-**Status:** stable release; adds hardware-qualified QMI8658 / Waveshare ESP32-S3 RGB Matrix support on top of the 0.1.0 feature baseline
+**Version:** `0.1.2-dev-b001`  
+**Status:** development bugfix build based on the stable 0.1.1 release; adds WLED PinManager ownership for Custom I²C pins
 
 A standalone WLED usermod that automatically rotates the **final 2D matrix raster** according to an accelerometer, without changing effect or segment state.
+
+`0.1.2-dev-b001` is a focused integration fix: Custom I²C now reserves SDA/SCL through WLED `PinManager`, releases the exact reserved pair when ownership ends, and rolls the reservation back if bus initialization fails. Shared I²C ownership semantics are unchanged.
 
 <p align="center">
   <img src="docs/images/auto-rotation-demo.gif" alt="WLED Matrix Auto Rotation demo" width="448">

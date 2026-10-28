@@ -1,6 +1,6 @@
-# v0.1.1 validation plan
+# v0.1.2-dev-b001 validation plan
 
-`0.1.1` is the stable promotion of the hardware-qualified QMI8658 / Waveshare path. Existing 0.1.0 sensor and rotation paths remain the regression baseline, and the final promotion from RC1 introduces no runtime algorithm changes.
+`0.1.2-dev-b001` is a focused bugfix build based on stable `0.1.1`. Its only intended runtime change is correct WLED `PinManager` ownership for Custom I²C SDA/SCL. Existing 0.1.1 sensor, calibration, recovery and raster behavior remain the regression baseline.
 
 Hardware validated for the 0.1.0 release:
 
@@ -15,6 +15,17 @@ Hardware validated for the 0.1.0 release:
 - runtime disconnect/reconnect recovery without reboot.
 
 The checks below are the release-regression matrix.
+
+
+## 0.1.2 Custom I2C PinManager regression
+
+- [ ] Custom mode starts successfully on a free SDA/SCL pair.
+- [ ] A conflicting WLED allocation causes MAR Custom initialization to fail without taking either pin.
+- [ ] After disabling MAR, disabling Auto Rotation, or switching away from Custom mode, the previously reserved pair is released.
+- [ ] Changing Custom SDA/SCL releases the old reserved pair and reserves the new pair.
+- [ ] A failed `Wire.begin()` / dedicated-bus begin rolls back both pin reservations.
+- [ ] Shared mode behavior remains unchanged and does not reserve or release the global WLED I2C pins.
+- [ ] MatrixPortal and Waveshare presets remain functionally unchanged.
 
 ## 1. Configuration UI
 
